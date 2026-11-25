@@ -2,6 +2,10 @@
 
 This document contains everything required to submit **`Touchbar Addon for Firefox`** (`v0.2.1`) to the official **Mozilla Add-ons (`addons.mozilla.org`) Listed store**.
 
+> **Current Submission Status Note:**  
+> - **AMO Listed (`v0.2.1`, awaiting review):** Built from commit `9e85d54` (prior to the non-`Cmd+Q` window-close Touch Bar auto-dismiss fix).  
+> - **Repository `master` (`57cf7bb+`) & Updated Companion Helper (`touchbar-browser-helper-macos-x86_64.tar.gz`):** Includes the native macOS fix (`AppDelegate.swift` + `TouchBarHandler.swift`) that dismisses the Touch Bar automatically when closing all Firefox windows (`×` / `Cmd+W`) or hiding Firefox (`Cmd+H`), working immediately with both `v0.2.0` and `v0.2.1`. The matching JS fallback in `tabManagement.js` is queued for the `v0.2.2` extension update after `v0.2.1` passes review.
+
 ---
 
 ## 1. Pre-flight Compliance Checklist (Already Completed in Repo)
