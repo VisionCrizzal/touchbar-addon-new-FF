@@ -1,56 +1,17 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import { el } from '../dom'
 
-import iconBack from '../assets/icon-back.svg'
-
-const Navbar = styled.nav`
-  padding: 4px;
-  height: 40px;
-  border-bottom: 1px solid #dfdfe0;
-  display: flex;
-  align-items: center;
-`
-
-const BackLink = styled.a`
-  padding: 8px;
-  margin-right: 8px;
-  width: 32px;
-  height: 32px;
-  position: absolute;
-
-  &:hover {
-    background-color: #eee;
-  }
-`
-
-const Title = styled.h1`
-  margin: 0;
-  padding: 0;
-  font-weight: bold;
-  font-size: 1rem;
-  text-align: center;
-  width: 100%;
-`
-
-const NavigationHeader = ({ title }) => {
-  const navigate = useNavigate()
-
-  return (
-    <Navbar>
-      <BackLink
-        href="#"
-        onClick={e => {
-          e.preventDefault()
-          navigate(-1)
-        }}
-        aria-label="Back"
-      >
-        <img src={iconBack} alt="Back" />
-      </BackLink>
-      <Title>{title}</Title>
-    </Navbar>
-  )
+export function createNavigationHeader(title, onBack) {
+  return el('nav', { className: 'nav-header' }, [
+    el(
+      'button',
+      {
+        className: 'back-btn',
+        type: 'button',
+        'aria-label': 'Back',
+        onClick: onBack,
+      },
+      [el('img', { src: './assets/icon-back.svg', alt: 'Back' })]
+    ),
+    el('h1', { className: 'nav-title', text: title }),
+  ])
 }
-
-export default NavigationHeader

@@ -5,135 +5,122 @@
 
 /* global touchbar:readonly */
 
-const githubPaths = [
-  '/pulls',
-  '/issues',
-  '/marketplace',
-  '/explore',
-  '/topics',
-  '/trending',
-  '/collections',
-  '/events',
-  '/sponsors',
-]
+(() => {
+  if (window.__touchbarGithubLoaded) return
+  window.__touchbarGithubLoaded = true
 
-console.log('LOADING GITHUB SCRIPT')
+  const githubPaths = [
+    '/pulls',
+    '/issues',
+    '/marketplace',
+    '/explore',
+    '/topics',
+    '/trending',
+    '/collections',
+    '/events',
+    '/sponsors',
+  ]
 
-console.log(
-  'PATHNAME',
-  location.pathname,
-  location.pathname == '/',
-  githubPaths.find(x => location.pathname.startsWith(x))
-)
+  if (
+    location.pathname == '/' ||
+    githubPaths.find(x => location.pathname.startsWith(x))
+  ) {
+    loadGeneral()
+  } else {
+    loadRepo()
+  }
 
-if (
-  location.pathname == '/' ||
-  githubPaths.find(x => location.pathname.startsWith(x))
-) {
-  loadGeneral()
-} else {
-  loadRepo()
-}
+  function loadGeneral() {
+    const ACTION_HOME = 'navigate-home'
+    const ACTION_PULL_REQUESTS = 'navigate-pull-requests'
+    const ACTION_ISSUES = 'navigate-issues'
+    const ACTION_MARKETPLACE = 'navigate-marketplace'
+    const ACTION_EXPLORE = 'navigate-explore'
 
-function loadGeneral() {
-  console.log('not repo')
+    touchbar.changeLayout([
+      {
+        type: 'button',
+        name: ACTION_HOME,
+        label: 'Home',
+      },
+      {
+        type: 'button',
+        name: ACTION_PULL_REQUESTS,
+        label: 'Pull requests',
+      },
+      {
+        type: 'button',
+        name: ACTION_ISSUES,
+        label: 'Issues',
+      },
+      {
+        type: 'button',
+        name: ACTION_MARKETPLACE,
+        label: 'Marketplace',
+      },
+      {
+        type: 'button',
+        name: ACTION_EXPLORE,
+        label: 'Explore',
+      },
+    ])
 
-  const ACTION_HOME = 'navigate-home'
-  const ACTION_PULL_REQUESTS = 'navigate-pull-requests'
-  const ACTION_ISSUES = 'navigate-issues'
-  const ACTION_MARKETPLACE = 'navigate-marketplace'
-  const ACTION_EXPLORE = 'navigate-explore'
-
-  touchbar.changeLayout([
-    {
-      type: 'button',
-      name: ACTION_HOME,
-      label: 'Home',
-    },
-    {
-      type: 'button',
-      name: ACTION_PULL_REQUESTS,
-      label: 'Pull requests',
-    },
-    {
-      type: 'button',
-      name: ACTION_ISSUES,
-      label: 'Issues',
-    },
-    {
-      type: 'button',
-      name: ACTION_MARKETPLACE,
-      label: 'Marketplace',
-    },
-    {
-      type: 'button',
-      name: ACTION_EXPLORE,
-      label: 'Explore',
-    },
-  ])
-
-  touchbar.addEventListener(message => {
-    if (message.type == 'action') {
-      switch (message.name) {
-        case ACTION_HOME:
-          location.href = '/'
-          break
-        case ACTION_PULL_REQUESTS:
-          location.href = '/pulls'
-          break
-        case ACTION_ISSUES:
-          location.href = '/issues'
-          break
-        case ACTION_MARKETPLACE:
-          location.href = '/marketplace'
-          break
-        case ACTION_EXPLORE:
-          location.href = '/explore'
-          break
+    touchbar.addEventListener(message => {
+      if (message.type == 'action') {
+        switch (message.name) {
+          case ACTION_HOME:
+            location.href = '/'
+            break
+          case ACTION_PULL_REQUESTS:
+            location.href = '/pulls'
+            break
+          case ACTION_ISSUES:
+            location.href = '/issues'
+            break
+          case ACTION_MARKETPLACE:
+            location.href = '/marketplace'
+            break
+          case ACTION_EXPLORE:
+            location.href = '/explore'
+            break
+        }
       }
-    }
-  })
-}
+    })
+  }
 
-function loadRepo() {
-  // Repository
-  console.log('repo here')
+  function loadRepo() {
+    const repoMenu = document.querySelector(
+      'main nav[aria-label="Repository"] ul'
+    )
+    if (!repoMenu) return
 
-  const repoMenu = document.querySelector(
-    'main nav[aria-label="Repository"] ul'
-  )
+    const menuItemElements = repoMenu.querySelectorAll('li')
+    const menuItems = [...menuItemElements]
+      .map(elm => ({
+        link: elm.querySelector('a')?.href,
+        label: elm.querySelector('span')?.textContent?.trim(),
+      }))
+      .filter(item => item.link && item.label)
 
-  console.log('REPO MENU', repoMenu)
+    if (menuItems.length === 0) return
 
-  const menuItemElements = repoMenu.querySelectorAll('li')
+    const layout = menuItems.map(item => ({
+      type: 'button',
+      name: `navigate-repo-${item.label}`,
+      label: item.label,
+    }))
 
-  console.log(menuItemElements)
+    touchbar.changeLayout(layout)
 
-  const menuItems = [...menuItemElements].map(elm => ({
-    link: elm.querySelector('a').href,
-    label: elm.querySelector('span').textContent,
-  }))
-
-  console.log(menuItems)
-
-  const layout = menuItems.map(item => ({
-    type: 'button',
-    name: `navigate-repo-${item.label}`,
-    label: item.label,
-  }))
-
-  console.log(menuItems, layout)
-
-  touchbar.changeLayout(layout)
-
-  touchbar.addEventListener(message => {
-    if (message.type == 'action') {
-      const item = menuItems.find(
-        x => message.name == `navigate-repo-${x.label}`
-      )
-      if (item) {
-        location.href = item.link
+    touchbar.addEventListener(message => {
+      if (message.type == 'action') {
+        const item = menuItems.find(
+          x => message.name == `navigate-repo-${x.label}`
+        )
+        if (item) {
+          location.href = item.link
+        }
       }
-    }
-  })
-}
+    })
+  }
+})()

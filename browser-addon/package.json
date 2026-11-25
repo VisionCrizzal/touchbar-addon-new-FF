@@ -1,6 +1,6 @@
 {
   "name": "touchbar-addon-new-ff",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Native macOS Touch Bar controls for Firefox",
   "author": "viktorstrate <viktorstrate@gmail.com>, VisionCrizzal",
   "license": "GPL-3.0",
@@ -12,13 +12,8 @@
     "package": "node scripts/build.mjs && web-ext build -s ./dist --overwrite-dest",
     "package:source": "node scripts/package-source.mjs",
     "sign:unlisted": "node scripts/sign-unlisted.mjs",
+    "sign:listed": "node scripts/sign-listed.mjs",
     "launch": "node scripts/build.mjs && web-ext run -s ./dist"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.0",
-    "styled-components": "^6.1.19"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",

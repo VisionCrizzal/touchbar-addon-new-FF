@@ -19,6 +19,7 @@ const artifactsDir = path.join(rootDir, 'web-ext-artifacts')
 const ALLOWED_ENTRIES = [
   'package.json',
   'package-lock.json',
+  'amo-metadata.json',
   'scripts',
   'src',
   'static',
@@ -30,7 +31,7 @@ function filterSourceEntry(srcPath) {
 }
 
 /**
- * Packages clean extension source files and build instructions into a zip archive for AMO review.
+ * Packages clean extension source files and reproducible build instructions into a zip archive for AMO review.
  * @returns {string} Path to the generated source archive.
  */
 export function packageSourceArchive() {
@@ -57,14 +58,14 @@ export function packageSourceArchive() {
       '=========================================================================',
       '',
       `Tested Runtime: Node.js ${process.version} & npm`,
-      'Bundler: esbuild (configured in scripts/build.mjs)',
+      'Bundler: esbuild (configured in scripts/build.mjs with minify: false)',
       '',
       'Build Steps:',
       '  1. Run: npm ci',
       '  2. Run: npm run build',
       '',
       'Output:',
-      '  The compiled WebExtension files matching the submitted .zip/.xpi are generated in ./dist/',
+      '  Unminified WebExtension files matching the submitted .zip/.xpi are generated in ./dist/',
       '',
     ].join('\n')
 

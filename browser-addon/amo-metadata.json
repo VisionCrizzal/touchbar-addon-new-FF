@@ -1,0 +1,26 @@
+{
+  "default_locale": "en-US",
+  "categories": {
+    "firefox": ["tabs", "appearance"]
+  },
+  "summary": {
+    "en-US": "Native macOS Touch Bar controls for Firefox: compact navigation, Edge-style open tab scrubber with favicons, and YouTube/HTML5 media controls."
+  },
+  "description": {
+    "en-US": "IMPORTANT PREREQUISITE (macOS Only): This extension requires a MacBook Pro with a macOS Touch Bar and the open-source macOS companion helper (`touchbar-browser-helper`). Firefox WebExtensions cannot access the hardware Touch Bar directly without installing the local Native Messaging helper from the GitHub repository:\nhttps://github.com/VisionCrizzal/touchbar-addon-new-FF\n\nFeatures:\n- Replaces Firefox's default Touch Bar with an Edge-style compact bar (with optional Full-width mode)\n- Scrollable open tabs switcher displaying live favicons and audio/mute/pinned badges\n- Compact Back/Forward/Reload navigation, New Tab, Close Tab, Reopen Closed Tab, and Mute Tab controls\n- Dedicated YouTube controls (Play/Pause, -10s / +10s seek, progress scrubber) plus automatic HTML5 video/audio detection on other websites\n- 1-tap toggle button between active/background playing media and your Open Tabs scrubber\n- Auto-show when switching back to Firefox, configurable from the toolbar popup\n\nAll communication stays strictly local on your Mac via Firefox Native Messaging. Zero telemetry or remote tracking. Licensed under GPL-3.0."
+  },
+  "homepage": {
+    "en-US": "https://github.com/VisionCrizzal/touchbar-addon-new-FF"
+  },
+  "support_url": {
+    "en-US": "https://github.com/VisionCrizzal/touchbar-addon-new-FF/issues"
+  },
+  "requires_payment": false,
+  "version": {
+    "license": "GPL-3.0-only",
+    "release_notes": {
+      "en-US": "Prepare for public AMO listing: migrated built-in site packets from user_scripts to standard static content_scripts and browser.contentScripts.register with static files, removed dynamic code strings, replaced popup UI with zero-dependency DOM code, and added PNG icons."
+    },
+    "approval_notes": "Platform requirement: macOS with Touch Bar hardware and open-source companion binary touchbar-browser-helper (https://github.com/VisionCrizzal/touchbar-addon-new-FF). The extension communicates locally over stdio Native Messaging strictly to render Touch Bar UI items and relay button/scrubber tap events; no shell execution or external network calls occur. Reproducible build (from attached source archive): Node.js v24.14.0, run `npm ci && npm run build`; outputs unminified bundles in ./dist/ via esbuild with zero runtime npm dependencies."
+  }
+}

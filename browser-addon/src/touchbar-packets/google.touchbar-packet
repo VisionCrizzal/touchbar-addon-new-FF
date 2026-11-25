@@ -7,38 +7,45 @@
 
 /* global touchbar:readonly */
 
-const googleServices = [
-  {
-    name: 'Gmail',
-    link: 'https://mail.google.com/mail',
-  },
-  {
-    name: 'Drive',
-    link: 'https://drive.google.com/',
-  },
-  {
-    name: 'Photos',
-    link: 'https://photos.google.com/',
-  },
-  {
-    name: 'Calendar',
-    link: 'https://google.com/calendar',
-  },
-]
+(() => {
+  if (window.__touchbarGoogleLoaded) return
+  window.__touchbarGoogleLoaded = true
 
-touchbar.changeLayout(
-  googleServices.map(x => ({
-    type: 'button',
-    name: `navigate-${x.name}`,
-    label: x.name,
-  }))
-)
+  const googleServices = [
+    {
+      name: 'Gmail',
+      link: 'https://mail.google.com/mail',
+    },
+    {
+      name: 'Drive',
+      link: 'https://drive.google.com/',
+    },
+    {
+      name: 'Photos',
+      link: 'https://photos.google.com/',
+    },
+    {
+      name: 'Calendar',
+      link: 'https://google.com/calendar',
+    },
+  ]
 
-touchbar.addEventListener(message => {
-  if (message.type == 'action') {
-    const item = googleServices.find(x => message.name == `navigate-${x.name}`)
-    if (item) {
-      location.href = item.link
+  touchbar.changeLayout(
+    googleServices.map(x => ({
+      type: 'button',
+      name: `navigate-${x.name}`,
+      label: x.name,
+    }))
+  )
+
+  touchbar.addEventListener(message => {
+    if (message.type == 'action') {
+      const item = googleServices.find(
+        x => message.name == `navigate-${x.name}`
+      )
+      if (item) {
+        location.href = item.link
+      }
     }
-  }
-})
+  })
+})()

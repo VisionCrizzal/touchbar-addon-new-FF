@@ -1,12 +1,13 @@
 {
   "name": "Touchbar Addon for Firefox",
   "manifest_version": 2,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "homepage_url": "https://github.com/VisionCrizzal/touchbar-addon-new-FF",
-  "description": "Native macOS Touch Bar controls for Firefox",
+  "description": "Native macOS Touch Bar controls for Firefox (tabs, navigation, and media scrubber) via a local companion helper.",
   "icons": {
-    "48": "icons/touchbar-icon.svg",
-    "96": "icons/touchbar-icon.svg"
+    "48": "icons/touchbar-icon-48.png",
+    "96": "icons/touchbar-icon-96.png",
+    "128": "icons/touchbar-icon-128.png"
   },
   "browser_specific_settings": {
     "gecko": {
@@ -22,13 +23,39 @@
   },
   "browser_action": {
     "browser_style": true,
-    "default_icon": "icons/touchbar-icon.svg",
+    "default_icon": {
+      "48": "icons/touchbar-icon-48.png",
+      "96": "icons/touchbar-icon-96.png"
+    },
     "default_title": "Touchbar",
     "default_popup": "popup.html"
   },
-  "user_scripts": {
-    "api_script": "touchbarScriptAPI.js"
-  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["contentTouchbarBridge.js", "packets/youtube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["contentTouchbarBridge.js", "packets/github.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.google.com/?*",
+        "https://www.google.com/webhp?*",
+        "https://www.google.com/search?*"
+      ],
+      "js": ["contentTouchbarBridge.js", "packets/google.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.facebook.com/*", "https://facebook.com/*"],
+      "js": ["contentTouchbarBridge.js", "packets/facebook.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "permissions": [
     "https://*/*",
     "http://*/*",

@@ -227,7 +227,7 @@ export async function handleGlobalAction(action) {
       if (activeTab.status === 'loading') {
         await browser.tabs
           .executeScript(activeTab.id, {
-            code: 'window.stop()',
+            file: '/stopPage.js',
           })
           .catch(() => browser.tabs.reload(activeTab.id).catch(() => {}))
       } else {

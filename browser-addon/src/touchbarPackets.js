@@ -1,71 +1,112 @@
 /**
- * Configure and load touchbar packet scripts
+ * Configure and register built-in Touch Bar content script packets
  */
 
-import youtubePacket from './touchbar-packets/youtube.touchbar-packet'
-import githubPacket from './touchbar-packets/github.touchbar-packet'
-import googlePacket from './touchbar-packets/google.touchbar-packet'
-import facebookPacket from './touchbar-packets/facebook.touchbar-packet'
-import genericMediaPacket from './touchbar-packets/generic-media.touchbar-packet'
+const SITE_PACKETS = [
+  {
+    id: 'youtube',
+    headers: {
+      name: 'YouTube',
+      match: ['https://www.youtube.com/*'],
+    },
+    file: '/packets/youtube.js',
+  },
+  {
+    id: 'github',
+    headers: {
+      name: 'GitHub',
+      match: ['https://github.com/*'],
+    },
+    file: '/packets/github.js',
+  },
+  {
+    id: 'google',
+    headers: {
+      name: 'Google',
+      match: [
+        'https://www.google.com/?*',
+        'https://www.google.com/webhp?*',
+        'https://www.google.com/search?*',
+      ],
+    },
+    file: '/packets/google.js',
+  },
+  {
+    id: 'facebook',
+    headers: {
+      name: 'Facebook',
+      match: ['https://www.facebook.com/*', 'https://facebook.com/*'],
+    },
+    file: '/packets/facebook.js',
+  },
+]
 
-/**
- * Parses the header of a touchbar packet
- * @param {string} packet a raw touchbar-packet string
- */
-export function parseTouchbarPacket(packet) {
-  const [_, header, body] = packet.match(
-    /^[\n\s]*\/\/\s+==TouchbarPacket==([^]+)==\/TouchbarPacket==\n([^]+)/
-  )
-
-  const headerFields = header
-    .match(/@\w+\s.+/g)
-    .map(fieldLine => {
-      const [_, key, value] = fieldLine.match(/@(\w+)\s(.+)/)
-      return [key, value]
-    })
-    .reduce((result, field) => {
-      if (result[field[0]]) {
-        result[field[0]].push(field[1])
-      } else {
-        result[field[0]] = [field[1]]
-      }
-      return result
-    }, {})
-
-  headerFields.name = headerFields.name[0]
-
-  return {
-    headers: headerFields,
-    script: body,
-  }
+const GENERIC_MEDIA_PACKET = {
+  id: 'generic-media',
+  headers: {
+    name: 'HTML5 Media',
+    match: ['https://*/*', 'http://*/*'],
+  },
+  file: '/packets/generic-media.js',
 }
 
-const sitePackets = [
-  youtubePacket,
-  githubPacket,
-  googlePacket,
-  facebookPacket,
-].map(parseTouchbarPacket)
-
-const genericPacket = parseTouchbarPacket(genericMediaPacket)
-
-export const touchbarPackets = [...sitePackets, genericPacket]
+export const touchbarPackets = [...SITE_PACKETS, GENERIC_MEDIA_PACKET]
 
 let genericRegistration = null
 
 export async function setGenericMediaEnabled(enabled) {
   if (enabled) {
     if (!genericRegistration) {
-      genericRegistration = await browser.userScripts.register({
-        matches: genericPacket.headers.match,
-        js: [{ code: genericPacket.script }],
-        scriptMetadata: {},
+      genericRegistration = await browser.contentScripts.register({
+        matches: GENERIC_MEDIA_PACKET.headers.match,
+        excludeMatches: [
+          '*://www.youtube.com/*',
+          '*://youtube.com/*',
+          '*://*.youtube.com/*',
+        ],
+        js: [
+          { file: '/contentTouchbarBridge.js' },
+          { file: GENERIC_MEDIA_PACKET.file },
+        ],
+        runAt: 'document_idle',
       })
     }
   } else if (genericRegistration) {
     await genericRegistration.unregister()
     genericRegistration = null
   }
+}
+
+function getRehydrationPacketFile(tabUrl, enableGenericMedia) {
+  const url = new URL(tabUrl)
+  const hostname = url.hostname
+
+  if (hostname === 'www.youtube.com') {
+    return '/packets/youtube.js'
+  }
+  if (hostname === 'github.com') {
+    return '/packets/github.js'
+  }
+  if (
+    hostname === 'www.google.com' &&
+    (url.pathname === '/' ||
+      url.pathname === '/webhp' ||
+      url.pathname === '/search') &&
+    url.search.length > 0
+  ) {
+    return '/packets/google.js'
+  }
+  if (hostname === 'www.facebook.com' || hostname === 'facebook.com') {
+    return '/packets/facebook.js'
+  }
+  if (
+    enableGenericMedia &&
+    hostname !== 'youtube.com' &&
+    !hostname.endsWith('.youtube.com')
+  ) {
+    return '/packets/generic-media.js'
+  }
+  return null
 }
 
 export async function rehydrateOpenTabs({ enableGenericMedia = true } = {}) {
@@ -78,26 +119,15 @@ export async function rehydrateOpenTabs({ enableGenericMedia = true } = {}) {
       if (!tab?.id || !tab?.url || tab.discarded) continue
 
       try {
-        const hostname = new URL(tab.url).hostname
-        if (hostname === 'www.youtube.com') {
-          await browser.tabs.executeScript(tab.id, {
-            file: '/contentTouchbarBridge.js',
-          })
-          await browser.tabs.executeScript(tab.id, {
-            file: '/packets/youtube.js',
-          })
-        } else if (
-          enableGenericMedia &&
-          hostname !== 'youtube.com' &&
-          !hostname.endsWith('.youtube.com')
-        ) {
-          await browser.tabs.executeScript(tab.id, {
-            file: '/contentTouchbarBridge.js',
-          })
-          await browser.tabs.executeScript(tab.id, {
-            file: '/packets/generic-media.js',
-          })
-        }
+        const packetFile = getRehydrationPacketFile(tab.url, enableGenericMedia)
+        if (!packetFile) continue
+
+        await browser.tabs.executeScript(tab.id, {
+          file: '/contentTouchbarBridge.js',
+        })
+        await browser.tabs.executeScript(tab.id, {
+          file: packetFile,
+        })
       } catch {
         // Ignore restricted or unloaded tabs
       }
@@ -110,20 +140,6 @@ export async function rehydrateOpenTabs({ enableGenericMedia = true } = {}) {
 export const loadTouchbarPackets = async function ({
   enableGenericMedia = true,
 } = {}) {
-  const packetRegisterPromises = sitePackets.map(packet => {
-    return browser.userScripts.register({
-      matches: packet.headers.match,
-      js: [
-        {
-          code: packet.script,
-        },
-      ],
-      scriptMetadata: {},
-    })
-  })
-
-  await Promise.all(packetRegisterPromises)
   await setGenericMediaEnabled(enableGenericMedia)
-
-  console.log('All touchbar packets loaded')
+  console.log('All touchbar packets configured')
 }

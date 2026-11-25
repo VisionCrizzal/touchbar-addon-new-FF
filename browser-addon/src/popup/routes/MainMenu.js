@@ -1,62 +1,76 @@
-import React, { useContext } from 'react'
-import styled from 'styled-components'
-import { PopupContext } from '../app'
+import { el } from '../dom'
 
-import MenuItem from '../components/MenuItem'
-import MenuLabel from '../components/MenuLabel'
-import Separator from '../components/MenuSeparator'
+const HELPER_SETUP_URL =
+  'https://github.com/VisionCrizzal/touchbar-addon-new-FF#1-build--install-the-native-messaging-host'
 
-const StatusRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  font-size: 0.9rem;
-`
-
-const StatusBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  color: ${props => (props.$connected ? '#1e8e3e' : '#c5221f')};
-`
-
-const Dot = styled.span`
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: ${props => (props.$connected ? '#1e8e3e' : '#c5221f')};
-`
-
-const ModeText = styled.span`
-  color: #555;
-  font-size: 0.85rem;
-`
-
-const MainMenu = () => {
-  const { status, touchbarPackets } = useContext(PopupContext)
+export function renderMainMenu({ status, packets, onNavigate }) {
   const connected = Boolean(status?.nativeConnected)
   const modeLabel = status?.activeStatus?.activeLayoutType || 'Global Firefox Bar'
 
-  return (
-    <div>
-      <MenuLabel>Status</MenuLabel>
-      <StatusRow>
-        <StatusBadge $connected={connected}>
-          <Dot $connected={connected} />
-          {connected ? 'Helper Connected' : 'Helper Disconnected'}
-        </StatusBadge>
-        <ModeText>{modeLabel}</ModeText>
-      </StatusRow>
-      <Separator />
-      <MenuItem
-        label={`Installed packets (${touchbarPackets.length})`}
-        navigateTo="/installed-packets"
-      />
-      <MenuItem label="Touch Bar Settings" navigateTo="/settings" />
-    </div>
-  )
-}
+  const nodes = [
+    el('small', { className: 'menu-label', text: 'Status' }),
+    el('div', { className: 'status-row' }, [
+      el(
+        'span',
+        {
+          className: `status-badge ${connected ? 'connected' : 'disconnected'}`,
+        },
+        [
+          el('span', { className: 'status-dot' }),
+          connected ? 'Helper Connected' : 'Helper Disconnected',
+        ]
+      ),
+      el('span', { className: 'mode-text', text: modeLabel }),
+    ]),
+  ]
 
-export default MainMenu
+  if (!connected) {
+    nodes.push(
+      el('div', { className: 'helper-notice' }, [
+        el('div', {
+          text: 'Touch Bar rendering requires installing the macOS companion helper (touchbar-browser-helper).',
+        }),
+        el('button', {
+          className: 'helper-link-btn',
+          type: 'button',
+          text: 'Open macOS Helper Setup Guide',
+          onClick: () => {
+            browser.tabs
+              .create({ url: HELPER_SETUP_URL })
+              .catch(() => {})
+          },
+        }),
+      ])
+    )
+  }
+
+  nodes.push(
+    el('hr', { className: 'separator' }),
+    el(
+      'button',
+      {
+        className: 'menu-item-btn',
+        type: 'button',
+        onClick: () => onNavigate('/installed-packets'),
+      },
+      [
+        el('span', { text: `Installed packets (${packets.length})` }),
+        el('span', { className: 'menu-item-chevron', text: '›' }),
+      ]
+    ),
+    el(
+      'button',
+      {
+        className: 'menu-item-btn',
+        type: 'button',
+        onClick: () => onNavigate('/settings'),
+      },
+      [
+        el('span', { text: 'Touch Bar Settings' }),
+        el('span', { className: 'menu-item-chevron', text: '›' }),
+      ]
+    )
+  )
+
+  return el('div', {}, nodes)
+}

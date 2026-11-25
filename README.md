@@ -20,15 +20,21 @@ Forked from [`viktorstrate/native-touchbar-addon`](https://github.com/viktorstra
 ## How it works
 
 1. **Native Helper (`touchbar-browser-helper/`)**: A macOS SwiftPM CLI executable (`AppKit` + `DFRFoundation`) that connects to Firefox over stdio [Native Messaging](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging) and renders `button` (SF Symbols & `bezelColor`), `slider`, `label`, `spacer`, `scrubber` (`NSScrubber`), and `popover` items on the Touch Bar.
-2. **Firefox Extension (`browser-addon/`)**: A Manifest V2 WebExtension bundled with `esbuild` that manages global Firefox tab/navigation controls, injects `touchbar` APIs into `touchbar-packets` (`userScripts`), and relays updates to the native helper.
+2. **Firefox Extension (`browser-addon/`)**: A Manifest V2 WebExtension bundled (unminified for review transparency) with `esbuild` that manages global Firefox tab/navigation controls, registers static content scripts (`contentTouchbarBridge.js` + `packets/*.js`), and relays updates to the native helper.
+
+---
+
+## Privacy
+
+Zero telemetry or remote network calls — see [PRIVACY.md](./PRIVACY.md).
 
 ---
 
 ## Prerequisites
 
 - macOS with Touch Bar hardware (tested on macOS 15.7.4 `x86_64`)
-- **Xcode Command Line Tools** (`xcode-select --install`) — full Xcode.app is **not** required
-- **Node.js** & **npm**
+- **Xcode Command Line Tools** (`xcode-select --install`) if building from source — full Xcode.app is **not** required
+- **Node.js** & **npm** (for building the Firefox extension)
 
 ---
 
@@ -38,6 +44,13 @@ Build the Swift helper in release mode, install the binary to `~/Library/Applica
 
 ```sh
 ./scripts/install-native-host.sh
+```
+
+To package a standalone prebuilt macOS `.tar.gz` archive (including `install.sh` and `uninstall.sh` for GitHub Releases):
+
+```sh
+./scripts/package-native-host.sh
+# Outputs: dist/touchbar-browser-helper-macos-<arch>.tar.gz
 ```
 
 Verify Native Messaging framing, Phase 2 components, error handling, and clean `stdin` EOF exit:
@@ -78,9 +91,9 @@ npm run dev
 
 ---
 
-## 4. Packaging `.xpi` & Permanent Signing (AMO Unlisted)
+## 4. Packaging `.xpi` & AMO Signing (Unlisted & Listed)
 
-Standard release builds of Firefox require add-ons to be signed by Mozilla before permanent installation. You can sign the current `v0.2.0` release on the **Unlisted** channel right away so you can install it permanently without `about:debugging`:
+Standard release builds of Firefox require add-ons to be signed by Mozilla before permanent installation. See [`AMO_SUBMISSION.md`](./AMO_SUBMISSION.md) for the complete public **AMO Listed** store submission checklist, listing text, and Reviewer Notes.
 
 ### Step 1 — Build extension & source archives
 
@@ -90,14 +103,14 @@ npm run package
 npm run package:source
 ```
 
-This outputs both `web-ext-artifacts/touchbar_addon_for_firefox-0.2.0.zip` and a clean source archive `web-ext-artifacts/touchbar_addon_for_firefox-0.2.0-source.zip` (required by AMO because `scripts/build.mjs` bundles/minifies JS with `esbuild`).
+This outputs both `web-ext-artifacts/touchbar_addon_for_firefox-0.2.1.zip` and a clean source archive `web-ext-artifacts/touchbar_addon_for_firefox-0.2.1-source.zip`.
 
 ### Step 2 — Get Mozilla Add-ons (AMO) API credentials
 
 1. Sign in at [Mozilla Add-ons Developer Hub](https://addons.mozilla.org/developers/) and accept the Developer Agreement.
 2. Generate JWT credentials (**JWT issuer** & **JWT secret**) at [`https://addons.mozilla.org/developers/addon/api/key/`](https://addons.mozilla.org/developers/addon/api/key/).
 
-### Step 3 — Sign via CLI (`npm run sign:unlisted`)
+### Step 3 — Sign via CLI (`sign:unlisted` or `sign:listed`)
 
 Pass your AMO credentials via inline environment variables:
 
@@ -106,16 +119,16 @@ cd browser-addon
 WEB_EXT_API_KEY="user:12345678:901" WEB_EXT_API_SECRET="your-secret" npm run sign:unlisted
 ```
 
-Or store them locally in `browser-addon/.env.amo` (ignored by `.gitignore`) and run `npm run sign:unlisted`:
+Or store them locally in `browser-addon/.env.amo` (ignored by `.gitignore`) and run `npm run sign:unlisted` (or `npm run sign:listed` for public AMO Listed submission with [`amo-metadata.json`](./browser-addon/amo-metadata.json)):
 
 ```env
 WEB_EXT_API_KEY=user:12345678:901
 WEB_EXT_API_SECRET=your-secret
 ```
 
-`npm run sign:unlisted` automatically runs `npm run build`, `web-ext lint`, builds `*-source.zip`, and executes `web-ext sign --channel=unlisted --upload-source-code ...`. You can preview everything without hitting AMO using `node scripts/sign-unlisted.mjs --dry-run`.
+Both scripts run `npm run build`, `web-ext lint`, create `*-source.zip`, and execute `web-ext sign` cleanly (`--dry-run` supported).
 
-> **Manual web upload alternative**: On [AMO Developer Hub](https://addons.mozilla.org/developers/addon/submit/distribution), choose **On your own** (Unlisted), upload `touchbar_addon_for_firefox-0.2.0.zip`, select **Yes** when asked about build tools/minifiers, upload `touchbar_addon_for_firefox-0.2.0-source.zip` with build command `npm ci && npm run build`, then download the signed `.xpi`.
+> **Manual web upload alternative**: On [AMO Developer Hub](https://addons.mozilla.org/developers/), submit `touchbar_addon_for_firefox-0.2.1.zip` + `touchbar_addon_for_firefox-0.2.1-source.zip` with build command `npm ci && npm run build` (see [`AMO_SUBMISSION.md`](./AMO_SUBMISSION.md) for copy-paste metadata and Reviewer Notes).
 
 ### Step 4 — Install permanently in Firefox
 
