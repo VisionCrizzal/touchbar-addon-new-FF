@@ -18,17 +18,23 @@ extension NSTouchBarItem.Identifier {
 @MainActor
 final class TouchBarHandler: NSObject, NSTouchBarDelegate {
   private var isGlobalItemShown = false
+  private var isStripPresented = false
   var autoPresentOnFocus = true
   var replaceNativeTouchBar = true
   var fullWidthMode = false
   private(set) var isFirefoxFrontmost = false
+  private(set) var firefoxHasVisibleWindow = true
+
+  var shouldShowForFirefox: Bool {
+    isFirefoxFrontmost && firefoxHasVisibleWindow
+  }
 
   var layoutComponents: [TouchBarComponent] = [] {
     didSet {
       updateTouchbarStrip()
       if layoutComponents.isEmpty {
         touchbarStripVisible = false
-      } else if isFirefoxFrontmost && !touchbarStrip.isVisible && autoPresentOnFocus {
+      } else if shouldShowForFirefox && !touchbarStrip.isVisible && autoPresentOnFocus {
         touchbarStripVisible = true
       }
     }
@@ -57,8 +63,10 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
             systemTrayItemIdentifier: .touchbarBrowserClose
           )
         }
-      } else {
+        isStripPresented = true
+      } else if isStripPresented || touchbarStrip.isVisible {
         NSTouchBar.dismissSystemModalTouchBar(touchbarStrip)
+        isStripPresented = false
       }
     }
     get {
@@ -83,7 +91,10 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
 
     TouchBarHideSystemModalCloseButton(replaceNativeTouchBar)
 
-    guard isFirefoxFrontmost else { return }
+    guard shouldShowForFirefox else {
+      removeGlobalTouchBarItem()
+      return
+    }
 
     if replaceNativeTouchBar {
       removeControlStripOnly()
@@ -101,20 +112,28 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
     }
   }
 
-  func setFirefoxFrontmost(_ frontmost: Bool) {
+  func setFirefoxPresentation(frontmost: Bool, hasVisibleWindow: Bool) {
+    let wasActive = shouldShowForFirefox
     isFirefoxFrontmost = frontmost
-    if frontmost {
+    firefoxHasVisibleWindow = hasVisibleWindow
+    let isActive = shouldShowForFirefox
+
+    if isActive {
       if !replaceNativeTouchBar {
         showGlobalTouchBarItem()
       } else {
         removeControlStripOnly()
       }
-      if autoPresentOnFocus && !layoutComponents.isEmpty {
+      if autoPresentOnFocus && !layoutComponents.isEmpty && (!wasActive || !touchbarStrip.isVisible) {
         touchbarStripVisible = true
       }
     } else {
       removeGlobalTouchBarItem()
     }
+  }
+
+  func setFirefoxFrontmost(_ frontmost: Bool) {
+    setFirefoxPresentation(frontmost: frontmost, hasVisibleWindow: frontmost)
   }
 
   func updateTouchbarStrip() {

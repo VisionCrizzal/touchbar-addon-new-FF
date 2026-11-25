@@ -88,6 +88,23 @@ function findBackgroundMediaTab(activeTabId, windowTabs) {
   )
 }
 
+function clearAllTouchbarLayouts() {
+  tabTouchbarLayouts = {}
+  activeTouchbarTab = null
+  controlTargetTabId = null
+  lastMediaTabId = null
+  preferTabsView = false
+  preferMediaTabId = null
+  scrubberVisible = false
+
+  if (activeNativePort) {
+    activeNativePort.postMessage({
+      type: 'change_layout',
+      layout: [],
+    })
+  }
+}
+
 export async function refreshTouchbarForActiveTab() {
   if (!activeNativePort) return
   const generation = ++refreshGeneration
@@ -98,7 +115,22 @@ export async function refreshTouchbarForActiveTab() {
       currentWindow: true,
     })
 
-    if (!activeTab || generation !== refreshGeneration) return
+    if (generation !== refreshGeneration) return
+
+    if (!activeTab) {
+      const openWindows = await browser.windows
+        .getAll({ windowTypes: ['normal', 'popup'] })
+        .catch(() => [])
+      if (generation !== refreshGeneration) return
+      if (openWindows.length === 0) {
+        clearAllTouchbarLayouts()
+      } else {
+        scrubberVisible = false
+        controlTargetTabId = null
+        activeNativePort.postMessage({ type: 'dismiss_touchbar' })
+      }
+      return
+    }
 
     activeTouchbarTab = activeTab.id
 
@@ -280,10 +312,19 @@ export const loadTabManagement = ({ nativePort, settings }) => {
     refreshTouchbarForActiveTab()
   })
 
-  browser.windows.onFocusChanged.addListener(windowId => {
-    if (windowId !== browser.windows.WINDOW_ID_NONE) {
+  browser.windows.onRemoved.addListener(async () => {
+    const openWindows = await browser.windows
+      .getAll({ windowTypes: ['normal', 'popup'] })
+      .catch(() => [])
+    if (openWindows.length === 0) {
+      clearAllTouchbarLayouts()
+    } else {
       refreshTouchbarForActiveTab()
     }
+  })
+
+  browser.windows.onFocusChanged.addListener(() => {
+    refreshTouchbarForActiveTab()
   })
 
   browser.tabs.onCreated.addListener(() => refreshScrubberOnly())
