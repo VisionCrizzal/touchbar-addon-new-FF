@@ -112,8 +112,21 @@ if (dryRun) {
   process.exit(0)
 }
 
+const nodeFlags = [
+  '--dns-result-order=ipv4first',
+  '--network-family-autoselection-attempt-timeout=2000',
+]
+const existingNodeOptions = process.env.NODE_OPTIONS || ''
+const missingNodeFlags = nodeFlags.filter(
+  flag => !existingNodeOptions.includes(flag.split('=')[0])
+)
+const signNodeOptions = [existingNodeOptions, ...missingNodeFlags]
+  .filter(Boolean)
+  .join(' ')
+
 const signEnv = {
   ...process.env,
+  NODE_OPTIONS: signNodeOptions,
   WEB_EXT_API_KEY: apiKey,
   WEB_EXT_API_SECRET: apiSecret,
 }
