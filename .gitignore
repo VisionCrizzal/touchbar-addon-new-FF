@@ -21,3 +21,7 @@ dist/
 .cache/
 web-ext-artifacts/
 *.xpi
+
+# Secrets / AMO credentials
+.env
+.env.*

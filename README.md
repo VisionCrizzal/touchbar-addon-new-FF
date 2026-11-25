@@ -80,17 +80,53 @@ npm run dev
 
 ## 4. Packaging `.xpi` & Permanent Signing (AMO Unlisted)
 
-To create an extension archive in `browser-addon/web-ext-artifacts/`:
+Standard release builds of Firefox require add-ons to be signed by Mozilla before permanent installation. You can sign the current `v0.2.0` release on the **Unlisted** channel right away so you can install it permanently without `about:debugging`:
+
+### Step 1 — Build extension & source archives
 
 ```sh
 cd browser-addon
 npm run package
+npm run package:source
 ```
 
-Standard release builds of Firefox require add-ons to be signed by Mozilla before permanent installation:
+This outputs both `web-ext-artifacts/touchbar_addon_for_firefox-0.2.0.zip` and a clean source archive `web-ext-artifacts/touchbar_addon_for_firefox-0.2.0-source.zip` (required by AMO because `scripts/build.mjs` bundles/minifies JS with `esbuild`).
 
-- **Self-distribution (Unlisted)**: Sign the package as an Unlisted add-on on [Mozilla Add-ons (AMO)](https://addons.mozilla.org/developers/) or via `web-ext sign --channel=unlisted --api-key=... --api-secret=...` using your AMO JWT credentials, then install the resulting signed `.xpi` directly in Firefox (`Add-ons and Themes` → gear icon → **Install Add-on From File…**).
-- Note that the Gecko add-on ID in `browser-addon/static/manifest.json` (`touchbar-addon-new-ff@visioncrizzal.github.com`) must match `allowed_extensions` in `~/Library/Application Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json`.
+### Step 2 — Get Mozilla Add-ons (AMO) API credentials
+
+1. Sign in at [Mozilla Add-ons Developer Hub](https://addons.mozilla.org/developers/) and accept the Developer Agreement.
+2. Generate JWT credentials (**JWT issuer** & **JWT secret**) at [`https://addons.mozilla.org/developers/addon/api/key/`](https://addons.mozilla.org/developers/addon/api/key/).
+
+### Step 3 — Sign via CLI (`npm run sign:unlisted`)
+
+Pass your AMO credentials via inline environment variables:
+
+```sh
+cd browser-addon
+WEB_EXT_API_KEY="user:12345678:901" WEB_EXT_API_SECRET="your-secret" npm run sign:unlisted
+```
+
+Or store them locally in `browser-addon/.env.amo` (ignored by `.gitignore`) and run `npm run sign:unlisted`:
+
+```env
+WEB_EXT_API_KEY=user:12345678:901
+WEB_EXT_API_SECRET=your-secret
+```
+
+`npm run sign:unlisted` automatically runs `npm run build`, `web-ext lint`, builds `*-source.zip`, and executes `web-ext sign --channel=unlisted --upload-source-code ...`. You can preview everything without hitting AMO using `node scripts/sign-unlisted.mjs --dry-run`.
+
+> **Manual web upload alternative**: On [AMO Developer Hub](https://addons.mozilla.org/developers/addon/submit/distribution), choose **On your own** (Unlisted), upload `touchbar_addon_for_firefox-0.2.0.zip`, select **Yes** when asked about build tools/minifiers, upload `touchbar_addon_for_firefox-0.2.0-source.zip` with build command `npm ci && npm run build`, then download the signed `.xpi`.
+
+### Step 4 — Install permanently in Firefox
+
+1. Remove the temporary extension in `about:debugging#/runtime/this-firefox` (or restart Firefox).
+2. Open `about:addons` → gear icon → **Install Add-on From File…**.
+3. Select the signed `.xpi` inside `browser-addon/web-ext-artifacts/`.
+4. Open the Touch Bar add-on popup to confirm **Native Helper** reports `Connected`.
+
+> **Compatibility notes**:
+> - The Gecko add-on ID in `browser-addon/static/manifest.json` (`touchbar-addon-new-ff@visioncrizzal.github.com`) matches `allowed_extensions` in `~/Library/Application Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json`.
+> - No custom `update_url` is set in `manifest.json`, keeping this ID ready to transition to the public AMO **Listed** store in a future version bump.
 
 ---
 

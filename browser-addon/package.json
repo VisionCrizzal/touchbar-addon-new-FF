@@ -10,6 +10,8 @@
     "build": "node scripts/build.mjs",
     "lint": "node scripts/build.mjs && web-ext lint -s ./dist",
     "package": "node scripts/build.mjs && web-ext build -s ./dist --overwrite-dest",
+    "package:source": "node scripts/package-source.mjs",
+    "sign:unlisted": "node scripts/sign-unlisted.mjs",
     "launch": "node scripts/build.mjs && web-ext run -s ./dist"
   },
   "dependencies": {
