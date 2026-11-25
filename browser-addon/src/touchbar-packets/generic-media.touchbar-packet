@@ -14,6 +14,9 @@
     return
   }
 
+  if (window.__touchbarGenericMediaLoaded) return
+  window.__touchbarGenericMediaLoaded = true
+
   const PLAYBACK_SLIDER = 'generic-playback-slider'
   const MEDIA_PLAYPAUSE = 'generic-media-playpause'
   const MEDIA_BACK_10 = 'generic-media-back-10'

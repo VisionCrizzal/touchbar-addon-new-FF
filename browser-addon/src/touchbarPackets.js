@@ -68,6 +68,45 @@ export async function setGenericMediaEnabled(enabled) {
   }
 }
 
+export async function rehydrateOpenTabs({ enableGenericMedia = true } = {}) {
+  try {
+    const openTabs = await browser.tabs.query({
+      url: ['http://*/*', 'https://*/*'],
+    })
+
+    for (const tab of openTabs) {
+      if (!tab?.id || !tab?.url || tab.discarded) continue
+
+      try {
+        const hostname = new URL(tab.url).hostname
+        if (hostname === 'www.youtube.com') {
+          await browser.tabs.executeScript(tab.id, {
+            file: '/contentTouchbarBridge.js',
+          })
+          await browser.tabs.executeScript(tab.id, {
+            file: '/packets/youtube.js',
+          })
+        } else if (
+          enableGenericMedia &&
+          hostname !== 'youtube.com' &&
+          !hostname.endsWith('.youtube.com')
+        ) {
+          await browser.tabs.executeScript(tab.id, {
+            file: '/contentTouchbarBridge.js',
+          })
+          await browser.tabs.executeScript(tab.id, {
+            file: '/packets/generic-media.js',
+          })
+        }
+      } catch {
+        // Ignore restricted or unloaded tabs
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to rehydrate open tabs:', err)
+  }
+}
+
 export const loadTouchbarPackets = async function ({
   enableGenericMedia = true,
 } = {}) {

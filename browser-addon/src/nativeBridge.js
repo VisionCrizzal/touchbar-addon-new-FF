@@ -34,7 +34,8 @@ export const loadNativePort = ({ nativePort, settings }) => {
           .then(tabs => {
             if (
               tabs?.[0]?.id === sender.tab.id ||
-              tabManagement.getControlTargetTabId() === sender.tab.id
+              tabManagement.getControlTargetTabId() === sender.tab.id ||
+              tabManagement.getControlTargetTabId() === null
             ) {
               tabManagement.refreshTouchbarForActiveTab()
             }

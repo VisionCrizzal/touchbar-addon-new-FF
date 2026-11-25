@@ -5,7 +5,11 @@
 
 /* global touchbar:readonly */
 
-console.log('TOUCHBAR SCRIPT EXECUTING on', window.location.href)
+(() => {
+  if (window.__touchbarYoutubeLoaded) return
+  window.__touchbarYoutubeLoaded = true
+
+  console.log('TOUCHBAR SCRIPT EXECUTING on', window.location.href)
 
 let onEventFunction = null
 let retryTimerId = null
@@ -368,3 +372,4 @@ function hookPageChanges() {
   window.addEventListener('popstate', handlePossibleNavigation)
   setInterval(handlePossibleNavigation, 500)
 }
+})()

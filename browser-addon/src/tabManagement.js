@@ -11,6 +11,7 @@ import { DEFAULT_SETTINGS } from './settings'
 let tabTouchbarLayouts = {}
 let activeTouchbarTab = null
 let controlTargetTabId = null
+let lastMediaTabId = null
 let preferTabsView = false
 let preferMediaTabId = null
 let currentSettings = { ...DEFAULT_SETTINGS }
@@ -21,6 +22,9 @@ let refreshGeneration = 0
 
 export const setTabTouchbarLayout = (tabId, layout, isActive = false) => {
   tabTouchbarLayouts[tabId] = layout
+  if (layout?.length) {
+    lastMediaTabId = tabId
+  }
   if (isActive) {
     activeTouchbarTab = tabId
   }
@@ -61,6 +65,29 @@ export const getActiveTabStatus = () => {
   }
 }
 
+function findBackgroundMediaTab(activeTabId, windowTabs) {
+  const audibleMatch = windowTabs.find(
+    t =>
+      t.id !== activeTabId &&
+      t.audible &&
+      tabTouchbarLayouts[t.id]?.length
+  )
+  if (audibleMatch) return audibleMatch
+
+  if (lastMediaTabId && lastMediaTabId !== activeTabId) {
+    const recentMatch = windowTabs.find(
+      t => t.id === lastMediaTabId && tabTouchbarLayouts[t.id]?.length
+    )
+    if (recentMatch) return recentMatch
+  }
+
+  return (
+    windowTabs.find(
+      t => t.id !== activeTabId && tabTouchbarLayouts[t.id]?.length
+    ) || null
+  )
+}
+
 export async function refreshTouchbarForActiveTab() {
   if (!activeNativePort) return
   const generation = ++refreshGeneration
@@ -80,12 +107,7 @@ export async function refreshTouchbarForActiveTab() {
 
     const activeSiteLayout = tabTouchbarLayouts[activeTab.id] || null
     const bgMediaTab = !activeSiteLayout
-      ? windowTabs.find(
-          t =>
-            t.id !== activeTab.id &&
-            t.audible &&
-            tabTouchbarLayouts[t.id]?.length
-        )
+      ? findBackgroundMediaTab(activeTab.id, windowTabs)
       : null
 
     let siteLayout = null
@@ -159,12 +181,7 @@ export async function toggleMediaTabsMode() {
       const windowTabs = await browser.tabs.query({
         windowId: activeTab.windowId,
       })
-      const bgMediaTab = windowTabs.find(
-        t =>
-          t.id !== activeTab.id &&
-          t.audible &&
-          tabTouchbarLayouts[t.id]?.length
-      )
+      const bgMediaTab = findBackgroundMediaTab(activeTab.id, windowTabs)
       if (bgMediaTab) {
         preferMediaTabId =
           preferMediaTabId === bgMediaTab.id ? null : bgMediaTab.id
@@ -246,6 +263,9 @@ export const loadTabManagement = ({ nativePort, settings }) => {
     if (activeTouchbarTab === tabId) {
       activeTouchbarTab = null
     }
+    if (lastMediaTabId === tabId) {
+      lastMediaTabId = null
+    }
     if (preferMediaTabId === tabId || controlTargetTabId === tabId) {
       preferMediaTabId = null
       refreshTouchbarForActiveTab()
@@ -283,6 +303,9 @@ export const loadTabManagement = ({ nativePort, settings }) => {
 
           if (oldHost !== newHost) {
             delete tabTouchbarLayouts[tabId]
+            if (lastMediaTabId === tabId) {
+              lastMediaTabId = null
+            }
             if (controlTargetTabId === tabId) {
               preferMediaTabId = null
             }

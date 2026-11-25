@@ -5,7 +5,7 @@
 
 import { loadNativePort } from './nativeBridge'
 import { loadTabManagement } from './tabManagement'
-import { loadTouchbarPackets } from './touchbarPackets'
+import { loadTouchbarPackets, rehydrateOpenTabs } from './touchbarPackets'
 import { loadPopupAPI } from './popupApi'
 import { loadSettings } from './settings'
 
@@ -15,12 +15,16 @@ async function init() {
 
   console.log('background start')
 
-  await loadTouchbarPackets({
-    enableGenericMedia: settings.enableGenericMedia,
-  })
   loadTabManagement({ nativePort, settings })
   loadNativePort({ nativePort, settings })
   loadPopupAPI()
+
+  await loadTouchbarPackets({
+    enableGenericMedia: settings.enableGenericMedia,
+  })
+  await rehydrateOpenTabs({
+    enableGenericMedia: settings.enableGenericMedia,
+  })
 }
 
 init().catch(err => {

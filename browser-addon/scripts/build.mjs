@@ -13,6 +13,17 @@ function copyStaticAssets() {
   mkdirSync(distDir, { recursive: true })
   cpSync(staticDir, distDir, { recursive: true })
   cpSync(path.join(rootDir, 'src', 'popup.html'), path.join(distDir, 'popup.html'))
+
+  const packetsDistDir = path.join(distDir, 'packets')
+  mkdirSync(packetsDistDir, { recursive: true })
+  cpSync(
+    path.join(rootDir, 'src', 'touchbar-packets', 'youtube.touchbar-packet'),
+    path.join(packetsDistDir, 'youtube.js')
+  )
+  cpSync(
+    path.join(rootDir, 'src', 'touchbar-packets', 'generic-media.touchbar-packet'),
+    path.join(packetsDistDir, 'generic-media.js')
+  )
 }
 
 rmSync(distDir, { recursive: true, force: true })
@@ -40,6 +51,11 @@ const buildConfigs = [
     ...commonOptions,
     entryPoints: [path.join(rootDir, 'src', 'touchbarScriptAPI.js')],
     outfile: path.join(distDir, 'touchbarScriptAPI.js'),
+  },
+  {
+    ...commonOptions,
+    entryPoints: [path.join(rootDir, 'src', 'contentTouchbarBridge.js')],
+    outfile: path.join(distDir, 'contentTouchbarBridge.js'),
   },
   {
     ...commonOptions,
