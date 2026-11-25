@@ -1,0 +1,223 @@
+// ==TouchbarPacket==
+// @name HTML5 Media
+// @match https://*/*
+// @match http://*/*
+// ==/TouchbarPacket==
+
+/* global touchbar:readonly */
+
+(() => {
+  if (
+    location.hostname === 'youtube.com' ||
+    location.hostname.endsWith('.youtube.com')
+  ) {
+    return
+  }
+
+  const PLAYBACK_SLIDER = 'generic-playback-slider'
+  const MEDIA_PLAYPAUSE = 'generic-media-playpause'
+  const MEDIA_BACK_10 = 'generic-media-back-10'
+  const MEDIA_FWD_10 = 'generic-media-fwd-10'
+
+  let currentMedia = null
+  let cleanupMediaListeners = null
+  let lastSyncAt = 0
+
+  function formatTimestamp(time) {
+    if (!Number.isFinite(time) || time < 0) return '0:00'
+    const totalSeconds = Math.floor(time)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    const secStr = seconds < 10 ? `0${seconds}` : `${seconds}`
+    if (hours > 0) {
+      const minStr = minutes < 10 ? `0${minutes}` : `${minutes}`
+      return `${hours}:${minStr}:${secStr}`
+    }
+    return `${minutes}:${secStr}`
+  }
+
+  function hasFiniteDuration(media) {
+    return Boolean(media && Number.isFinite(media.duration) && media.duration > 0)
+  }
+
+  function getProgressRatio(media) {
+    if (!hasFiniteDuration(media) || !Number.isFinite(media.currentTime)) {
+      return 0
+    }
+    return Math.min(1, Math.max(0, media.currentTime / media.duration))
+  }
+
+  function sendLayoutForMedia(media) {
+    const layout = [
+      {
+        type: 'button',
+        name: MEDIA_PLAYPAUSE,
+        label: '',
+        symbol: media.paused ? 'play.fill' : 'pause.fill',
+        width: 36,
+      },
+      {
+        type: 'button',
+        name: MEDIA_BACK_10,
+        label: '',
+        symbol: 'gobackward.10',
+        width: 36,
+      },
+      {
+        type: 'button',
+        name: MEDIA_FWD_10,
+        label: '',
+        symbol: 'goforward.10',
+        width: 36,
+      },
+    ]
+
+    if (hasFiniteDuration(media)) {
+      layout.push({
+        type: 'slider',
+        name: PLAYBACK_SLIDER,
+        label: formatTimestamp(media.currentTime),
+        value: getProgressRatio(media),
+        color: '#0a84ff',
+      })
+    }
+
+    lastSyncAt = Date.now()
+    touchbar.changeLayout(layout)
+  }
+
+  function attachToMedia(media) {
+    if (!media || currentMedia === media) return
+
+    if (cleanupMediaListeners) {
+      cleanupMediaListeners()
+      cleanupMediaListeners = null
+    }
+
+    currentMedia = media
+    let sliderIncluded = hasFiniteDuration(media)
+    sendLayoutForMedia(media)
+
+    const syncPlayPause = () => {
+      touchbar.updateItem(MEDIA_PLAYPAUSE, {
+        symbol: media.paused ? 'play.fill' : 'pause.fill',
+      })
+    }
+
+    const syncSlider = (force = false) => {
+      const canSlide = hasFiniteDuration(media)
+      if (canSlide !== sliderIncluded) {
+        sliderIncluded = canSlide
+        sendLayoutForMedia(media)
+        return
+      }
+      if (!canSlide) return
+
+      const now = Date.now()
+      if (!force && now - lastSyncAt < 400) return
+      lastSyncAt = now
+
+      touchbar.updateItem(PLAYBACK_SLIDER, {
+        value: getProgressRatio(media),
+        label: formatTimestamp(media.currentTime),
+      })
+    }
+
+    const onPlay = () => {
+      syncPlayPause()
+      syncSlider(true)
+    }
+
+    const onPauseOrEnd = () => {
+      syncPlayPause()
+      syncSlider(true)
+    }
+
+    const onTimeUpdate = () => syncSlider(false)
+    const onDurationOrSeek = () => syncSlider(true)
+
+    media.addEventListener('play', onPlay)
+    media.addEventListener('pause', onPauseOrEnd)
+    media.addEventListener('ended', onPauseOrEnd)
+    media.addEventListener('timeupdate', onTimeUpdate)
+    media.addEventListener('durationchange', onDurationOrSeek)
+    media.addEventListener('seeked', onDurationOrSeek)
+
+    cleanupMediaListeners = () => {
+      media.removeEventListener('play', onPlay)
+      media.removeEventListener('pause', onPauseOrEnd)
+      media.removeEventListener('ended', onPauseOrEnd)
+      media.removeEventListener('timeupdate', onTimeUpdate)
+      media.removeEventListener('durationchange', onDurationOrSeek)
+      media.removeEventListener('seeked', onDurationOrSeek)
+    }
+  }
+
+  touchbar.addEventListener(message => {
+    if (!currentMedia) return
+
+    if (message.type === 'action' && message.target === 'button') {
+      switch (message.name) {
+        case MEDIA_PLAYPAUSE:
+          if (currentMedia.paused) {
+            currentMedia.play().catch(() => {})
+          } else {
+            currentMedia.pause()
+          }
+          break
+        case MEDIA_BACK_10:
+          currentMedia.currentTime = Math.max(
+            0,
+            (currentMedia.currentTime || 0) - 10
+          )
+          break
+        case MEDIA_FWD_10: {
+          const next = (currentMedia.currentTime || 0) + 10
+          currentMedia.currentTime = hasFiniteDuration(currentMedia)
+            ? Math.min(currentMedia.duration, next)
+            : next
+          break
+        }
+      }
+    }
+
+    if (message.type === 'action' && message.target === 'slider') {
+      if (
+        message.name === PLAYBACK_SLIDER &&
+        hasFiniteDuration(currentMedia) &&
+        Number.isFinite(message.value)
+      ) {
+        const ratio = Math.min(1, Math.max(0, message.value))
+        const targetTime = currentMedia.duration * ratio
+        currentMedia.currentTime = targetTime
+        lastSyncAt = Date.now()
+        touchbar.updateItem(PLAYBACK_SLIDER, {
+          value: ratio,
+          label: formatTimestamp(targetTime),
+        })
+      }
+    }
+  })
+
+  document.addEventListener(
+    'play',
+    event => {
+      const target = event.target
+      if (
+        target instanceof HTMLVideoElement ||
+        target instanceof HTMLAudioElement
+      ) {
+        attachToMedia(target)
+      }
+    },
+    true
+  )
+
+  const existingPlaying = Array.from(
+    document.querySelectorAll('video, audio')
+  ).find(el => !el.paused && !el.ended)
+  if (existingPlaying) {
+    attachToMedia(existingPlaying)
+  }
+})()

@@ -8,18 +8,42 @@
 console.log('TOUCHBAR SCRIPT EXECUTING on', window.location.href)
 
 let onEventFunction = null
+let retryTimerId = null
+let cleanupListeners = []
+
 touchbar.addEventListener(message => {
   if (onEventFunction) onEventFunction(message)
 })
 
+function cleanupCurrentPage() {
+  if (retryTimerId !== null) {
+    clearTimeout(retryTimerId)
+    retryTimerId = null
+  }
+
+  while (cleanupListeners.length > 0) {
+    const fn = cleanupListeners.pop()
+    try {
+      fn()
+    } catch (err) {
+      console.warn('Error cleaning up touchbar listener:', err)
+    }
+  }
+
+  onEventFunction = null
+}
+
 configureTouchbar()
 function configureTouchbar() {
-  console.log('Configuring touchbar')
-  if (window.location.pathname === '/watch') {
-    // Video page
-    setupVideoPage()
+  cleanupCurrentPage()
+  console.log('Configuring touchbar for', window.location.pathname)
+
+  if (
+    window.location.pathname === '/watch' ||
+    window.location.pathname.startsWith('/shorts/')
+  ) {
+    setupVideoPage(0)
   } else {
-    // Home page
     setupGeneralNavigation()
   }
 }
@@ -35,21 +59,25 @@ function setupGeneralNavigation() {
       type: 'button',
       name: ACTION_HOME,
       label: 'Home',
+      symbol: 'house',
     },
     {
       type: 'button',
       name: ACTION_TRENDING,
       label: 'Trending',
+      symbol: 'flame',
     },
     {
       type: 'button',
       name: ACTION_SHORTS,
       label: 'Shorts',
+      symbol: 'play.rectangle',
     },
     {
       type: 'button',
       name: ACTION_SUBSCRIPTIONS,
       label: 'Subscriptions',
+      symbol: 'rectangle.stack',
     },
   ])
 
@@ -60,26 +88,28 @@ function setupGeneralNavigation() {
       )
       switch (message.name) {
         case ACTION_HOME:
-          if (menuItems) {
+          if (menuItems[0]) {
             menuItems[0].click()
           } else {
             location.href = '/'
           }
           break
         case ACTION_TRENDING:
-          if (menuItems) {
+          if (menuItems[1]) {
             menuItems[1].click()
           } else {
             location.href = '/feed/trending'
           }
           break
         case ACTION_SHORTS:
-          if (menuItems) {
+          if (menuItems[2]) {
             menuItems[2].click()
+          } else {
+            location.href = '/shorts'
           }
-          break 
+          break
         case ACTION_SUBSCRIPTIONS:
-          if (menuItems) {
+          if (menuItems[3]) {
             menuItems[3].click()
           } else {
             location.href = '/feed/subscriptions'
@@ -91,89 +121,184 @@ function setupGeneralNavigation() {
 }
 
 function formatTimestamp(time) {
-  let minutes = Math.floor(time / 60)
-  let seconds = Math.floor(time - 60 * minutes)
+  if (!Number.isFinite(time) || time < 0) {
+    return '0:00'
+  }
 
-  if (seconds < 10) seconds = '0' + seconds
+  const totalSeconds = Math.floor(time)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const secStr = seconds < 10 ? `0${seconds}` : `${seconds}`
 
-  return `${minutes}:${seconds}`
+  if (hours > 0) {
+    const minStr = minutes < 10 ? `0${minutes}` : `${minutes}`
+    return `${hours}:${minStr}:${secStr}`
+  }
+
+  return `${minutes}:${secStr}`
 }
 
-function setupVideoPage() {
-  console.log('configuring touchbar for video page')
+function getProgressRatio(video) {
+  if (
+    !Number.isFinite(video.duration) ||
+    video.duration <= 0 ||
+    !Number.isFinite(video.currentTime)
+  ) {
+    return 0
+  }
 
+  return Math.min(1, Math.max(0, video.currentTime / video.duration))
+}
+
+function isVisibleVideo(el) {
+  return Boolean(el && el.offsetWidth > 0 && el.offsetHeight > 0)
+}
+
+function findActiveVideo() {
+  const prioritySelectors = [
+    '#movie_player video.html5-main-video',
+    'ytd-watch-flexy #movie_player video',
+    'ytd-watch-grid #movie_player video',
+    '#shorts-player video.html5-main-video',
+    'ytd-reel-video-renderer[is-active] video',
+  ]
+
+  for (const selector of prioritySelectors) {
+    const candidate = document.querySelector(selector)
+    if (isVisibleVideo(candidate)) {
+      return candidate
+    }
+  }
+
+  const allVideos = Array.from(
+    document.querySelectorAll('video.video-stream, video')
+  ).filter(el => !el.closest('#inline-preview-player') && isVisibleVideo(el))
+
+  return (
+    allVideos.find(el => el.readyState > 0 || Boolean(el.currentSrc)) ||
+    allVideos[0] ||
+    null
+  )
+}
+
+function setupVideoPage(attempt = 0) {
   const PLAYBACK_SLIDER = 'playback-slider'
   const MEDIA_PLAYPAUSE_BUTTON = 'media-playpause'
-  const ICON_PLAY = 'NSTouchBarPlayTemplate'
-  const ICON_PAUSE = 'NSTouchBarPauseTemplate'
+  const MEDIA_BACK_10 = 'media-back-10'
+  const MEDIA_FWD_10 = 'media-fwd-10'
+  const SYMBOL_PLAY = 'play.fill'
+  const SYMBOL_PAUSE = 'pause.fill'
 
-  const video = document.querySelector('video.video-stream')
+  const video = findActiveVideo()
   if (!video) {
-    console.log('video page not loaded yet, waiting...')
-    setTimeout(setupVideoPage, 1000)
+    if (attempt < 20) {
+      retryTimerId = setTimeout(() => {
+        retryTimerId = null
+        setupVideoPage(attempt + 1)
+      }, 500)
+    }
     return
   }
 
-  const updateLayout = () => {
-    let playPauseButton
-    if (video.paused) {
-      playPauseButton = {
-        type: 'button',
-        name: MEDIA_PLAYPAUSE_BUTTON,
-        icon: ICON_PLAY,
-      }
-    } else {
-      playPauseButton = {
-        type: 'button',
-        name: MEDIA_PLAYPAUSE_BUTTON,
-        icon: ICON_PAUSE,
-      }
+  let lastSyncAt = 0
+
+  const sendInitialLayout = () => {
+    const playPauseButton = {
+      type: 'button',
+      name: MEDIA_PLAYPAUSE_BUTTON,
+      label: '',
+      symbol: video.paused ? SYMBOL_PLAY : SYMBOL_PAUSE,
+      width: 36,
+    }
+
+    const skipBackButton = {
+      type: 'button',
+      name: MEDIA_BACK_10,
+      label: '',
+      symbol: 'gobackward.10',
+      width: 36,
+    }
+
+    const skipForwardButton = {
+      type: 'button',
+      name: MEDIA_FWD_10,
+      label: '',
+      symbol: 'goforward.10',
+      width: 36,
     }
 
     const playbackSlider = {
       type: 'slider',
       name: PLAYBACK_SLIDER,
       label: formatTimestamp(video.currentTime),
-      value: video.currentTime / video.duration,
+      value: getProgressRatio(video),
       color: '#ff0000',
     }
 
-    console.log(playbackSlider)
-
-    touchbar.changeLayout([playPauseButton, playbackSlider])
+    lastSyncAt = Date.now()
+    touchbar.changeLayout([
+      playPauseButton,
+      skipBackButton,
+      skipForwardButton,
+      playbackSlider,
+    ])
   }
 
-  updateLayout()
-
-  let updateInterval = null
-
-  video.addEventListener('play', () => {
-    onPlayEvent()
-  })
-
-  if (!video.paused) {
-    onPlayEvent()
-  }
-
-  function onPlayEvent() {
+  const syncPlayPause = () => {
     touchbar.updateItem(MEDIA_PLAYPAUSE_BUTTON, {
-      icon: ICON_PAUSE,
+      symbol: video.paused ? SYMBOL_PLAY : SYMBOL_PAUSE,
     })
-
-    updateInterval = setInterval(() => {
-      touchbar.updateItem(PLAYBACK_SLIDER, {
-        value: video.currentTime / video.duration,
-        label: formatTimestamp(video.currentTime),
-      })
-    }, 500)
   }
 
-  video.addEventListener('pause', () => {
-    touchbar.updateItem(MEDIA_PLAYPAUSE_BUTTON, {
-      icon: ICON_PLAY,
+  const syncSlider = (force = false) => {
+    const now = Date.now()
+    if (!force && now - lastSyncAt < 400) {
+      return
+    }
+    lastSyncAt = now
+    touchbar.updateItem(PLAYBACK_SLIDER, {
+      value: getProgressRatio(video),
+      label: formatTimestamp(video.currentTime),
     })
+  }
 
-    clearInterval(updateInterval)
+  sendInitialLayout()
+
+  const onPlay = () => {
+    syncPlayPause()
+    syncSlider(true)
+  }
+
+  const onPauseOrEnd = () => {
+    syncPlayPause()
+    syncSlider(true)
+  }
+
+  const onTimeUpdate = () => {
+    syncSlider(false)
+  }
+
+  const onImmediateSync = () => {
+    syncSlider(true)
+  }
+
+  video.addEventListener('play', onPlay)
+  video.addEventListener('pause', onPauseOrEnd)
+  video.addEventListener('ended', onPauseOrEnd)
+  video.addEventListener('timeupdate', onTimeUpdate)
+  video.addEventListener('loadedmetadata', onImmediateSync)
+  video.addEventListener('durationchange', onImmediateSync)
+  video.addEventListener('seeked', onImmediateSync)
+
+  cleanupListeners.push(() => {
+    video.removeEventListener('play', onPlay)
+    video.removeEventListener('pause', onPauseOrEnd)
+    video.removeEventListener('ended', onPauseOrEnd)
+    video.removeEventListener('timeupdate', onTimeUpdate)
+    video.removeEventListener('loadedmetadata', onImmediateSync)
+    video.removeEventListener('durationchange', onImmediateSync)
+    video.removeEventListener('seeked', onImmediateSync)
   })
 
   onEventFunction = message => {
@@ -181,21 +306,47 @@ function setupVideoPage() {
       switch (message.name) {
         case MEDIA_PLAYPAUSE_BUTTON:
           if (video.paused) {
-            video.play()
+            const playPromise = video.play()
+            if (playPromise && typeof playPromise.catch === 'function') {
+              playPromise.catch(() => {
+                document.querySelector('#movie_player .ytp-play-button')?.click()
+              })
+            }
           } else {
             video.pause()
           }
           break
+        case MEDIA_BACK_10:
+          video.currentTime = Math.max(0, (video.currentTime || 0) - 10)
+          syncSlider(true)
+          break
+        case MEDIA_FWD_10: {
+          const next = (video.currentTime || 0) + 10
+          video.currentTime = Number.isFinite(video.duration)
+            ? Math.min(video.duration, next)
+            : next
+          syncSlider(true)
+          break
+        }
       }
     }
 
     if (message.type == 'action' && message.target == 'slider') {
-      if (message.name == PLAYBACK_SLIDER) {
-        console.log('new slider position', message.value)
-
-        const newTime = video.duration * message.value
-        video.currentTime = newTime
-        updateLayout()
+      if (message.name === PLAYBACK_SLIDER) {
+        if (
+          Number.isFinite(video.duration) &&
+          video.duration > 0 &&
+          Number.isFinite(message.value)
+        ) {
+          const ratio = Math.min(1, Math.max(0, message.value))
+          const targetTime = video.duration * ratio
+          video.currentTime = targetTime
+          lastSyncAt = Date.now()
+          touchbar.updateItem(PLAYBACK_SLIDER, {
+            value: ratio,
+            label: formatTimestamp(targetTime),
+          })
+        }
       }
     }
   }
@@ -203,18 +354,17 @@ function setupVideoPage() {
 
 hookPageChanges()
 function hookPageChanges() {
-  let oldHref = location.href
+  let lastHref = location.href
 
-  const observer = new MutationObserver(() => {
-    if (oldHref != document.location.href) {
-      oldHref = document.location.href
-      console.log('page changed')
+  const handlePossibleNavigation = () => {
+    if (location.href !== lastHref) {
+      lastHref = location.href
+      console.log('YouTube navigation detected:', lastHref)
       configureTouchbar()
     }
-  })
+  }
 
-  observer.observe(document.querySelector('body'), {
-    childList: true,
-    subtree: true,
-  })
+  window.addEventListener('yt-navigate-finish', handlePossibleNavigation)
+  window.addEventListener('popstate', handlePossibleNavigation)
+  setInterval(handlePossibleNavigation, 500)
 }

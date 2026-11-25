@@ -1,0 +1,4 @@
+module CTouchBar {
+    header "TouchBar.h"
+    export *
+}

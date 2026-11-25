@@ -1,7 +1,14 @@
+# macOS
+.DS_Store
+
 # Xcode
 
 ## User settings
 xcuserdata/
+
+# SwiftPM
+.build/
+.swiftpm/
 
 # Node
 
@@ -13,3 +20,4 @@ build/
 dist/
 .cache/
 web-ext-artifacts/
+*.xpi

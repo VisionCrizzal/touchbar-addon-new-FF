@@ -2,6 +2,12 @@
  * Configure and load touchbar packet scripts
  */
 
+import youtubePacket from './touchbar-packets/youtube.touchbar-packet'
+import githubPacket from './touchbar-packets/github.touchbar-packet'
+import googlePacket from './touchbar-packets/google.touchbar-packet'
+import facebookPacket from './touchbar-packets/facebook.touchbar-packet'
+import genericMediaPacket from './touchbar-packets/generic-media.touchbar-packet'
+
 /**
  * Parses the header of a touchbar packet
  * @param {string} packet a raw touchbar-packet string
@@ -34,15 +40,38 @@ export function parseTouchbarPacket(packet) {
   }
 }
 
-export const touchbarPackets = [
-  require('./touchbar-packets/youtube.touchbar-packet'),
-  require('./touchbar-packets/github.touchbar-packet'),
-  require('./touchbar-packets/google.touchbar-packet'),
-  require('./touchbar-packets/facebook.touchbar-packet'),
+const sitePackets = [
+  youtubePacket,
+  githubPacket,
+  googlePacket,
+  facebookPacket,
 ].map(parseTouchbarPacket)
 
-export const loadTouchbarPackets = async function () {
-  const packetRegisterPromises = touchbarPackets.map(packet => {
+const genericPacket = parseTouchbarPacket(genericMediaPacket)
+
+export const touchbarPackets = [...sitePackets, genericPacket]
+
+let genericRegistration = null
+
+export async function setGenericMediaEnabled(enabled) {
+  if (enabled) {
+    if (!genericRegistration) {
+      genericRegistration = await browser.userScripts.register({
+        matches: genericPacket.headers.match,
+        js: [{ code: genericPacket.script }],
+        scriptMetadata: {},
+      })
+    }
+  } else if (genericRegistration) {
+    await genericRegistration.unregister()
+    genericRegistration = null
+  }
+}
+
+export const loadTouchbarPackets = async function ({
+  enableGenericMedia = true,
+} = {}) {
+  const packetRegisterPromises = sitePackets.map(packet => {
     return browser.userScripts.register({
       matches: packet.headers.match,
       js: [
@@ -55,6 +84,7 @@ export const loadTouchbarPackets = async function () {
   })
 
   await Promise.all(packetRegisterPromises)
+  await setGenericMediaEnabled(enableGenericMedia)
 
   console.log('All touchbar packets loaded')
 }

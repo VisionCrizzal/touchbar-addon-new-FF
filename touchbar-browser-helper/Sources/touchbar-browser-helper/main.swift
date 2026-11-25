@@ -6,9 +6,11 @@
 //
 
 import Cocoa
+import Darwin
+
+signal(SIGPIPE, SIG_IGN)
 
 let app = NSApplication.shared
-
 let appDelegate = AppDelegate()
 app.delegate = appDelegate
 

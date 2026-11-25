@@ -2,60 +2,95 @@
  * Load native binary and communication to and from it
  */
 
+import { handleGlobalAction } from './globalTouchbar'
 import * as tabManagement from './tabManagement'
 
-export const loadNativePort = ({ nativePort }) => {
+let nativeConnected = false
+
+export const isNativeConnected = () => nativeConnected
+
+export const loadNativePort = ({ nativePort, settings }) => {
   nativePort.onDisconnect.addListener(p => {
-    if (p.error) {
-      console.log(`Disconnected due to an error: ${p.error.message}`)
-    }
+    nativeConnected = false
+    const reason =
+      p?.error?.message || browser.runtime.lastError?.message || 'unknown reason'
+    console.log(`Disconnected from native helper: ${reason}`)
   })
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (message.scope != 'native_bridge') return
+    if (!sender.tab) return
 
     if (message.type == 'send_native_message') {
       if (message.nativeMessage.type == 'change_layout') {
         tabManagement.setTabTouchbarLayout(
           sender.tab.id,
-          message.nativeMessage.layout
+          message.nativeMessage.layout,
+          false
         )
+
+        browser.tabs
+          .query({ active: true, currentWindow: true })
+          .then(tabs => {
+            if (
+              tabs?.[0]?.id === sender.tab.id ||
+              tabManagement.getControlTargetTabId() === sender.tab.id
+            ) {
+              tabManagement.refreshTouchbarForActiveTab()
+            }
+          })
+        return
       }
 
       if (message.nativeMessage.type == 'update_item') {
-        console.log('update item save state')
-
         tabManagement.updateTabTouchbarLayout(
           sender.tab.id,
           message.nativeMessage.name,
           message.nativeMessage.values
         )
-      }
 
-      // Only update touchbar if tab is active
-      browser.tabs
-        .query({ active: true, windowId: browser.windows.WINDOW_ID_CURRENT })
-        .then(tabs => browser.tabs.get(tabs[0].id))
-        .then(activeTab => {
-          if (activeTab.id === sender.tab.id) {
-            console.log('sending native message', message.nativeMessage)
-            nativePort.postMessage(message.nativeMessage)
-          }
-        })
+        if (tabManagement.getControlTargetTabId() === sender.tab.id) {
+          nativePort.postMessage(message.nativeMessage)
+        }
+      }
     }
   })
 
   nativePort.onMessage.addListener(response => {
-    console.log('Received', response)
+    if (response && response.type === 'ping') {
+      nativeConnected = true
+      console.log('Native helper ping response:', response)
+      return
+    }
 
-    const activeTouchbarTab = tabManagement.getActiveTouchbarTab()
+    if (response?.name === '__global_toggle_mode') {
+      tabManagement.toggleMediaTabsMode()
+      return
+    }
 
-    if (activeTouchbarTab) {
-      console.log('sending message to tab', activeTouchbarTab)
-      browser.tabs.sendMessage(activeTouchbarTab, {
-        ...response,
-        scope: 'native_bridge_response',
-      })
+    if (response?.name?.startsWith('__global_')) {
+      handleGlobalAction(response)
+      return
+    }
+
+    const targetTabId = tabManagement.getControlTargetTabId()
+
+    if (targetTabId) {
+      browser.tabs
+        .sendMessage(targetTabId, {
+          ...response,
+          scope: 'native_bridge_response',
+        })
+        .catch(() => {})
     }
   })
+
+  nativePort.postMessage({
+    type: 'set_config',
+    autoPresent: settings?.autoPresent ?? true,
+    replaceNative: settings?.replaceNativeTouchBar ?? true,
+    fullWidth: settings?.fullWidthMode ?? false,
+  })
+  nativePort.postMessage({ type: 'ping' })
+  tabManagement.refreshTouchbarForActiveTab()
 }

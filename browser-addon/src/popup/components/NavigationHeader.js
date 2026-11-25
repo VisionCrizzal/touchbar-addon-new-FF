@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import iconBack from '../assets/icon-back.svg'
@@ -32,11 +33,20 @@ const Title = styled.h1`
   width: 100%;
 `
 
-const NavigationHeader = ({ history, title }) => {
+const NavigationHeader = ({ title }) => {
+  const navigate = useNavigate()
+
   return (
     <Navbar>
-      <BackLink href="#" onClick={() => history.goBack()} aria-label="Back">
-        <img src={iconBack} />
+      <BackLink
+        href="#"
+        onClick={e => {
+          e.preventDefault()
+          navigate(-1)
+        }}
+        aria-label="Back"
+      >
+        <img src={iconBack} alt="Back" />
       </BackLink>
       <Title>{title}</Title>
     </Navbar>

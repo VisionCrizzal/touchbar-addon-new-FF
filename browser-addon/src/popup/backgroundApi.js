@@ -9,20 +9,33 @@ const sendPopupMessage = (type, payload) =>
     payload,
   })
 
+const listenerMap = new WeakMap()
+
 export const addPopupMessageListener = listener => {
-  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const wrapped = (message, sender, sendResponse) => {
     if (message.scope === 'popup_message') {
       listener(message, sender, sendResponse)
     }
-  })
+  }
+  listenerMap.set(listener, wrapped)
+  browser.runtime.onMessage.addListener(wrapped)
 }
 
 export const removePopupMessageListener = listener => {
-  browser.runtime.onMessage.removeListener(listener)
+  const wrapped = listenerMap.get(listener) || listener
+  browser.runtime.onMessage.removeListener(wrapped)
+  listenerMap.delete(listener)
 }
 
 /**
  * Get all installed touchbar-packets
- * @return Promise a prosimse resolving to a list of touchbar-packets
+ * @return Promise a promise resolving to a list of touchbar-packets
  */
 export const getTouchbarPackets = () => sendPopupMessage('get_touchbar_packets')
+
+export const getSettings = () => sendPopupMessage('get_settings')
+
+export const updateSettings = partial =>
+  sendPopupMessage('update_settings', partial)
+
+export const getStatus = () => sendPopupMessage('get_status')

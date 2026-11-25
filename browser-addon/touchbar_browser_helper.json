@@ -4,6 +4,6 @@
   "path": "/Users/YOUR_USERNAME/Library/Application Support/touchbar-browser-helper/touchbar-browser-helper",
   "type": "stdio",
   "allowed_extensions": [
-    "native_touchbar@viktorstrate.github.com"
+    "touchbar-addon-new-ff@visioncrizzal.github.com"
   ]
 }

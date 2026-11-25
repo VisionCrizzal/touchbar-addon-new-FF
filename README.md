@@ -1,58 +1,99 @@
-# Native Touchbar Addon
+# Touchbar Addon for Firefox (`touchbar-addon-new-FF`)
 
-Native macOS touchbar controls for webpages
+Native macOS Touch Bar controls for **Mozilla Firefox**.
 
-<img width="720" src="demo.gif">
+Forked from [`viktorstrate/native-touchbar-addon`](https://github.com/viktorstrate/native-touchbar-addon) under **GPL-3.0**.
+
+---
+
+## Features
+
+- **Seamless Native Touch Bar Replacement**: Replaces Firefox's default Touch Bar cleanly without an extra `(×)` close box or Control Strip globe icon (with optional Full-width mode in Settings).
+- **Microsoft Edge-Style Tab Scrubber**: Compact navigation (`< | >` segmented history + `↻` reload), real tab favicons rendered in `NSScrubber`, smart compact tiles when `>= 5` tabs are open, audio/mute/pin badges, and `+` New Tab.
+- **Media ↔ Tabs Switch Button**: 1-tap toggle between active/background playing media (YouTube, HTML5 media) and the Open Tabs scrubber without losing playback progress.
+- **Auto-Show on Firefox Focus**: Automatically presents the Touch Bar whenever Firefox becomes the frontmost application.
+- **YouTube & Generic HTML5 Media**: Compact Play/Pause, `-10s` / `+10s` seek buttons, and wide progress scrubber on YouTube (`/watch` and `/shorts/`) plus automatic HTML5 `<video>` / `<audio>` detection on other sites.
+- **Customizable Popup Settings**: Click the Touch Bar add-on icon in Firefox to check Native Helper status and toggle Replace Native Bar, Full-width mode, Navigation, Open Tabs Scrubber, New/Close/Reopen Tab, Mute Tab, Merge Nav, Auto-show, and HTML5 Media.
+
+---
 
 ## How it works
 
-The project consists of two parts, a regular browser extension and a native binary that controls the touchbar.
-The two parts communicate back and fourth using [Native Messaging](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging).
+1. **Native Helper (`touchbar-browser-helper/`)**: A macOS SwiftPM CLI executable (`AppKit` + `DFRFoundation`) that connects to Firefox over stdio [Native Messaging](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging) and renders `button` (SF Symbols & `bezelColor`), `slider`, `label`, `spacer`, `scrubber` (`NSScrubber`), and `popover` items on the Touch Bar.
+2. **Firefox Extension (`browser-addon/`)**: A Manifest V2 WebExtension bundled with `esbuild` that manages global Firefox tab/navigation controls, injects `touchbar` APIs into `touchbar-packets` (`userScripts`), and relays updates to the native helper.
 
-The browser extension exposes a bridging API to small JavaScript scripts that are injected into webpages using [URL pattern matching](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/content_scripts#Matching_URL_patterns).
-These small scripts are called [touchbar packets](./browser-addon/src/touchbar-packets/), and are formatted much like [Userscripts](https://en.wikipedia.org/wiki/Userscript), with a header describing the name of the packet and one or more url matches.
+---
 
-The binary is a small CLI app written mostly in Swift, its purpose is to receive configurations for the touchbar from the browser extension, update the touchbar accordingly and send any user interaction events back to the browser.
-The binary uses a private system API to show the new touchbar on top of the original. Thanks to [Touch Bär](https://github.com/a2/touch-baer).
+## Prerequisites
 
-## Installing
+- macOS with Touch Bar hardware (tested on macOS 15.7.4 `x86_64`)
+- **Xcode Command Line Tools** (`xcode-select --install`) — full Xcode.app is **not** required
+- **Node.js** & **npm**
 
-### Build and install the binary
+---
 
-Clone the repository, and navigate into it.
+## 1. Build & Install the Native Messaging Host
 
-```sh
-$ git clone https://github.com/viktorstrate/native-touchbar-addon
-$ cd native-touchbar-addon
-```
-
-Make sure you have the newest version of Xcode installed.
-Then run the following command to build and install the binary.
-
-Alternatively you can open the xcode project and click on `Product` -> `Build`
+Build the Swift helper in release mode, install the binary to `~/Library/Application Support/touchbar-browser-helper/touchbar-browser-helper`, ad-hoc sign it, and write the Firefox Native Messaging manifest to `~/Library/Application Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json`:
 
 ```sh
-$ xcodebuild -scheme touchbar-browser-helper
+./scripts/install-native-host.sh
 ```
 
-This will build the binary and copy it to `~/Library/Application Support/touchbar-browser-helper/`
-
-### Configure the Native Messaging Host
-
-Next we need to tell Firefox where the binary is located.
-To do this, copy the [touchbar-browser-helper.json](./browser-addon/touchbar_browser_helper.json) file to `~/Library/Application Support/Mozilla/NativeMessagingHosts/`. Then change the path attribute in the json file to match the username of your account.
-
-You can do all this by run the following commands.
+Verify Native Messaging framing, Phase 2 components, error handling, and clean `stdin` EOF exit:
 
 ```sh
-$ mkdir -p ~/Library/Application\ Support/Mozilla/NativeMessagingHosts/
-$ cp ./browser-addon/touchbar_browser_helper.json ~/Library/Application\ Support/Mozilla/NativeMessagingHosts/
-$ sed -i '' "s/YOUR_USERNAME/$USER/g" ~/Library/Application\ Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json
+node ./scripts/test-native-host.mjs
 ```
 
-### Install the browser extension
+---
 
-Install the browser extension from 
-https://addons.mozilla.org/en-US/firefox/addon/native-touchbar/
+## 2. Build the Firefox Extension
 
-The extension will automatically start the helper program in the background.
+```sh
+cd browser-addon
+npm install
+npm run build
+npm run lint
+```
+
+Built files are written to `browser-addon/dist/`.
+
+For active development with auto-rebuild on file edits:
+
+```sh
+cd browser-addon
+npm run dev
+```
+
+---
+
+## 3. Load in Firefox (Development)
+
+1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…**.
+3. Select `browser-addon/dist/manifest.json`.
+4. Click **Inspect** and open the **Console** tab to confirm:
+   `Native helper ping response: { type: "ping", success: true, value: "pong" }`
+
+---
+
+## 4. Packaging `.xpi` & Permanent Signing (AMO Unlisted)
+
+To create an extension archive in `browser-addon/web-ext-artifacts/`:
+
+```sh
+cd browser-addon
+npm run package
+```
+
+Standard release builds of Firefox require add-ons to be signed by Mozilla before permanent installation:
+
+- **Self-distribution (Unlisted)**: Sign the package as an Unlisted add-on on [Mozilla Add-ons (AMO)](https://addons.mozilla.org/developers/) or via `web-ext sign --channel=unlisted --api-key=... --api-secret=...` using your AMO JWT credentials, then install the resulting signed `.xpi` directly in Firefox (`Add-ons and Themes` → gear icon → **Install Add-on From File…**).
+- Note that the Gecko add-on ID in `browser-addon/static/manifest.json` (`touchbar-addon-new-ff@visioncrizzal.github.com`) must match `allowed_extensions` in `~/Library/Application Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json`.
+
+---
+
+## License
+
+GNU General Public License v3.0 — see [LICENSE](./LICENSE).

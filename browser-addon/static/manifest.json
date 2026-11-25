@@ -1,37 +1,34 @@
 {
-
-  "name": "Native Touchbar",
+  "name": "Touchbar Addon for Firefox",
   "manifest_version": 2,
-  "version": "0.1.0",
-
-  "homepage_url": "https://github.com/viktorstrate/native-touchbar-addon",
-  "description": "Native macOS touchbar controls",
+  "version": "0.2.0",
+  "homepage_url": "https://github.com/VisionCrizzal/touchbar-addon-new-FF",
+  "description": "Native macOS Touch Bar controls for Firefox",
   "icons": {
-    "48": "icons/touchbar-icon.svg"
+    "48": "icons/touchbar-icon.svg",
+    "96": "icons/touchbar-icon.svg"
   },
-
   "browser_specific_settings": {
     "gecko": {
-      "id": "native_touchbar@viktorstrate.github.com",
-      "strict_min_version": "68.0"
+      "id": "touchbar-addon-new-ff@visioncrizzal.github.com",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   },
-
   "background": {
     "scripts": ["background.js"]
   },
-
   "browser_action": {
     "browser_style": true,
     "default_icon": "icons/touchbar-icon.svg",
     "default_title": "Touchbar",
     "default_popup": "popup.html"
   },
-
   "user_scripts": {
     "api_script": "touchbarScriptAPI.js"
   },
-
   "permissions": [
     "https://*/*",
     "http://*/*",
@@ -40,5 +37,4 @@
     "tabs",
     "sessions"
   ]
-
 }
