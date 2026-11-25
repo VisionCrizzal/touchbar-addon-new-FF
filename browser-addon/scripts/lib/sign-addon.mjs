@@ -66,6 +66,7 @@ export function runSignAddon({ channel, amoMetadataFile = null }) {
   const dryRun = cliArgs.has('--dry-run')
   const noSource = cliArgs.has('--no-source')
   const skipMetadata = cliArgs.has('--skip-metadata')
+  const waitApproval = cliArgs.has('--wait-approval')
 
   const fileEnv = parseEnvFile(envFilePath)
   const apiKey =
@@ -120,6 +121,10 @@ export function runSignAddon({ channel, amoMetadataFile = null }) {
     './web-ext-artifacts',
   ]
 
+  if (channel === 'listed' && !waitApproval) {
+    signArgs.push('--approval-timeout=0')
+  }
+
   if (channel === 'listed' && amoMetadataFile && !skipMetadata) {
     const metadataPath = path.join(rootDir, amoMetadataFile)
     if (!existsSync(metadataPath)) {
@@ -156,6 +161,13 @@ export function runSignAddon({ channel, amoMetadataFile = null }) {
     : []
 
   console.log(`\nAMO ${channel} submission succeeded!`)
+  if (channel === 'listed' && !waitApproval) {
+    console.log(
+      'Listed version submitted for AMO human review. Track review status and complete store listing screenshots/icon in AMO Developer Hub.'
+    )
+    return
+  }
+
   if (xpiFiles.length > 0) {
     console.log('Signed .xpi artifact(s):')
     for (const xpi of xpiFiles) {
