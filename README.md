@@ -129,9 +129,8 @@ For AMO Unlisted/Listed signing CLI commands (`npm run sign:unlisted`, `npm run 
 
 ## Known Issues & Future Fixes
 
-The following legacy site-packet issues from the upstream 2020 fork are tracked for upcoming releases (`v0.2.2+`):
+The following legacy site-packet issue from the upstream 2020 fork is tracked for upcoming releases (`v0.2.2+`):
 
-- **GitHub packet controls unresponsive ([`github.touchbar-packet`](./browser-addon/src/touchbar-packets/github.touchbar-packet))**: The GitHub Touch Bar action buttons (`Home`, `Pull requests`, `Issues`, `Marketplace`, `Explore`, and repository nav shortcuts) currently fail to navigate / work properly, rely on legacy GitHub selectors, and do not track GitHub's Turbo SPA navigation. Needs a full rewrite or option to disable site shortcuts in favor of the Global Firefox Bar.
 - **YouTube `Trending` button obsolete ([`youtube.touchbar-packet`](./browser-addon/src/touchbar-packets/youtube.touchbar-packet))**: `setupGeneralNavigation()` on YouTube non-watch pages still shows a `Trending` button (`/feed/trending` / sidebar guide item), even though YouTube has removed the Trending feed. Needs removal or replacement with an active YouTube navigation action.
 
 ---
