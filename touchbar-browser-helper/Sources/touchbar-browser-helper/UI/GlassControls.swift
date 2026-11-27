@@ -458,14 +458,189 @@ final class GlassScrubberSelectionStyle: NSScrubberSelectionStyle {
   }
 }
 
+/// Custom compact Dark Glass scrub track replacing macOS's oversized white slider knob.
+@MainActor
+final class GlassScrubTrackView: NSView {
+  private let knobWidth: CGFloat = 10
+  private let knobHeight: CGFloat = 16
+  private let trackHeight: CGFloat = 4
+
+  private let trackBgLayer = CALayer()
+  private let trackFillLayer = CALayer()
+  private let knobLayer = CALayer()
+
+  private(set) var value: Double = 0.0
+  private(set) var isDragging: Bool = false
+  private var activeTouchIdentity: (any NSObjectProtocol & NSCopying)?
+
+  var trackColor: NSColor? {
+    didSet {
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      trackFillLayer.backgroundColor = (trackColor ?? NSColor.systemBlue).cgColor
+      CATransaction.commit()
+    }
+  }
+
+  var onValueCommitted: ((Double) -> Void)?
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    wantsLayer = true
+    allowedTouchTypes = [.direct]
+    translatesAutoresizingMaskIntoConstraints = false
+    layer?.masksToBounds = false
+
+    trackBgLayer.backgroundColor = NSColor(white: 1.0, alpha: 0.24).cgColor
+    trackBgLayer.cornerRadius = trackHeight / 2
+    trackBgLayer.cornerCurve = .continuous
+
+    trackFillLayer.backgroundColor = NSColor.systemBlue.cgColor
+    trackFillLayer.cornerRadius = trackHeight / 2
+    trackFillLayer.cornerCurve = .continuous
+
+    knobLayer.bounds = CGRect(x: 0, y: 0, width: knobWidth, height: knobHeight)
+    knobLayer.cornerRadius = knobWidth / 2
+    knobLayer.cornerCurve = .continuous
+    knobLayer.backgroundColor = NSColor(white: 0.96, alpha: 1.0).cgColor
+    knobLayer.borderWidth = 0.5
+    knobLayer.borderColor = NSColor(white: 1.0, alpha: 0.95).cgColor
+    knobLayer.shadowColor = NSColor.black.cgColor
+    knobLayer.shadowOpacity = 0.45
+    knobLayer.shadowRadius = 2.5
+    knobLayer.shadowOffset = CGSize(width: 0, height: -0.5)
+
+    layer?.addSublayer(trackBgLayer)
+    layer?.addSublayer(trackFillLayer)
+    layer?.addSublayer(knobLayer)
+
+    NSLayoutConstraint.activate([
+      heightAnchor.constraint(equalToConstant: 30),
+    ])
+  }
+
+  @available(*, unavailable)
+  required init(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layout() {
+    super.layout()
+    updateLayerFrames()
+  }
+
+  func setValueFromRemote(_ newValue: Double) {
+    guard !isDragging, newValue.isFinite else { return }
+    value = min(max(newValue, 0.0), 1.0)
+    updateLayerFrames()
+  }
+
+  private func updateLayerFrames() {
+    let minX = knobWidth / 2
+    let maxX = max(minX, bounds.width - knobWidth / 2)
+    let span = max(0, maxX - minX)
+    let trackY = (bounds.height - trackHeight) / 2
+    let knobCenterX = minX + CGFloat(value) * span
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    trackBgLayer.frame = CGRect(x: minX, y: trackY, width: span, height: trackHeight)
+    trackFillLayer.frame = CGRect(
+      x: minX,
+      y: trackY,
+      width: max(0, knobCenterX - minX),
+      height: trackHeight
+    )
+    knobLayer.position = CGPoint(x: knobCenterX, y: bounds.midY)
+    CATransaction.commit()
+  }
+
+  private func valueForX(_ x: CGFloat) -> Double {
+    let minX = knobWidth / 2
+    let maxX = max(minX, bounds.width - knobWidth / 2)
+    let span = maxX - minX
+    guard span > 0 else { return 0.0 }
+    let ratio = Double((x - minX) / span)
+    return min(max(ratio, 0.0), 1.0)
+  }
+
+  override func touchesBegan(with event: NSEvent) {
+    if activeTouchIdentity != nil { return }
+    guard let touch = event.touches(matching: .began, in: self).first else { return }
+    activeTouchIdentity = touch.identity
+    isDragging = true
+    value = valueForX(touch.location(in: self).x)
+    updateLayerFrames()
+    TouchBarMotion.animateScale(knobLayer, to: 1.22)
+  }
+
+  override func touchesMoved(with event: NSEvent) {
+    guard let identity = activeTouchIdentity else { return }
+    guard let touch = event.touches(matching: .moved, in: self).first(where: { $0.identity.isEqual(identity) }) else {
+      return
+    }
+    value = valueForX(touch.location(in: self).x)
+    updateLayerFrames()
+  }
+
+  override func touchesEnded(with event: NSEvent) {
+    guard let identity = activeTouchIdentity else { return }
+    guard let touch = event.touches(matching: .ended, in: self).first(where: { $0.identity.isEqual(identity) }) else {
+      return
+    }
+    activeTouchIdentity = nil
+    value = valueForX(touch.location(in: self).x)
+    updateLayerFrames()
+    isDragging = false
+    TouchBarMotion.animateScale(knobLayer, to: 1.0)
+    onValueCommitted?(value)
+  }
+
+  override func touchesCancelled(with event: NSEvent) {
+    activeTouchIdentity = nil
+    isDragging = false
+    TouchBarMotion.animateScale(knobLayer, to: 1.0)
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    isDragging = true
+    let pt = convert(event.locationInWindow, from: nil)
+    value = valueForX(pt.x)
+    updateLayerFrames()
+    TouchBarMotion.animateScale(knobLayer, to: 1.22)
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard isDragging else { return }
+    let pt = convert(event.locationInWindow, from: nil)
+    value = valueForX(pt.x)
+    updateLayerFrames()
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    guard isDragging else { return }
+    let pt = convert(event.locationInWindow, from: nil)
+    value = valueForX(pt.x)
+    updateLayerFrames()
+    isDragging = false
+    TouchBarMotion.animateScale(knobLayer, to: 1.0)
+    onValueCommitted?(value)
+  }
+}
+
 /// Dark Glass container for media slider with tabular monospaced timestamp label (zero horizontal jitter).
 @MainActor
 final class GlassSliderView: NSView {
   private let surfaceLayer = GlassSurfaceLayer()
   private let timestampLabel = NSTextField(labelWithString: "")
-  let slider = NSSlider()
+  private let trackView = GlassScrubTrackView(frame: .zero)
 
-  init(label: String?, value: Double, color: NSColor?, target: AnyObject?, action: Selector?) {
+  var onValueCommitted: ((Double) -> Void)? {
+    get { trackView.onValueCommitted }
+    set { trackView.onValueCommitted = newValue }
+  }
+
+  init(label: String?, value: Double, color: NSColor?) {
     super.init(frame: NSRect(x: 0, y: 0, width: 240, height: 30))
     wantsLayer = true
     translatesAutoresizingMaskIntoConstraints = false
@@ -481,17 +656,9 @@ final class GlassSliderView: NSView {
     timestampLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
     timestampLabel.translatesAutoresizingMaskIntoConstraints = false
 
-    slider.minValue = 0.0
-    slider.maxValue = 1.0
-    slider.isContinuous = false
-    slider.doubleValue = value.isFinite ? min(max(value, 0.0), 1.0) : 0.0
-    slider.trackFillColor = color
-    slider.target = target
-    slider.action = action
-    slider.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    slider.translatesAutoresizingMaskIntoConstraints = false
+    trackView.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-    let stack = NSStackView(views: [timestampLabel, slider])
+    let stack = NSStackView(views: [timestampLabel, trackView])
     stack.orientation = .horizontal
     stack.alignment = .centerY
     stack.spacing = 8
@@ -538,14 +705,14 @@ final class GlassSliderView: NSView {
       timestampLabel.isHidden = true
     }
 
-    if let value = value, value.isFinite {
-      slider.doubleValue = min(max(value, 0.0), 1.0)
+    if let value = value {
+      trackView.setValueFromRemote(value)
     }
 
     if let color = color {
-      slider.trackFillColor = color
+      trackView.trackColor = color
     } else if resetColorIfNil {
-      slider.trackFillColor = nil
+      trackView.trackColor = nil
     }
   }
 }

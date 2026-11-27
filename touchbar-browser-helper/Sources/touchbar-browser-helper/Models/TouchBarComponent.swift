@@ -571,10 +571,11 @@ final class TouchBarComponent: NSObject {
         let sliderView = GlassSliderView(
           label: label,
           value: value,
-          color: color,
-          target: self,
-          action: #selector(sliderControlAction(_:))
+          color: color
         )
+        sliderView.onValueCommitted = { [weak self] newValue in
+          self?.triggerSliderAction(value: newValue)
+        }
         self.glassSlider = sliderView
         customItem.view = sliderView
         return customItem
@@ -938,19 +939,14 @@ final class TouchBarComponent: NSObject {
     triggerSegmentedAction(at: sender.selectedSegment)
   }
 
-  @objc func sliderAction(_ sender: NSSliderTouchBarItem) {
-    let value = sender.slider.doubleValue
+  private func triggerSliderAction(value: Double) {
     NSLog("Slider action: %@ value=%.4f", name, value)
     browserCommunication.sendMessage(
       SliderActionMessage(name: name, value: value)
     )
   }
 
-  @objc func sliderControlAction(_ sender: NSSlider) {
-    let value = sender.doubleValue
-    NSLog("Slider action: %@ value=%.4f", name, value)
-    browserCommunication.sendMessage(
-      SliderActionMessage(name: name, value: value)
-    )
+  @objc func sliderAction(_ sender: NSSliderTouchBarItem) {
+    triggerSliderAction(value: sender.slider.doubleValue)
   }
 }
