@@ -54,9 +54,8 @@ function configureTouchbar() {
 
 function setupGeneralNavigation() {
   const ACTION_HOME = 'navigate-home'
-  const ACTION_TRENDING = 'navigate-trending'
-  const ACTION_SUBSCRIPTIONS = 'navigate-subscriptions'
   const ACTION_SHORTS = 'navigate-shorts'
+  const ACTION_SUBSCRIPTIONS = 'navigate-subscriptions'
 
   touchbar.changeLayout([
     {
@@ -64,12 +63,6 @@ function setupGeneralNavigation() {
       name: ACTION_HOME,
       label: 'Home',
       symbol: 'house',
-    },
-    {
-      type: 'button',
-      name: ACTION_TRENDING,
-      label: 'Trending',
-      symbol: 'flame',
     },
     {
       type: 'button',
@@ -85,39 +78,28 @@ function setupGeneralNavigation() {
     },
   ])
 
+  const clickGuideOrNavigate = (hrefPath, fallbackUrl) => {
+    const link = document.querySelector(
+      `ytd-guide-entry-renderer a[href="${hrefPath}"], ytd-mini-guide-entry-renderer a[href="${hrefPath}"]`
+    )
+    if (link) {
+      link.click()
+    } else {
+      location.href = fallbackUrl
+    }
+  }
+
   onEventFunction = message => {
     if (message.type == 'action') {
-      const menuItems = document.querySelectorAll(
-        '#items > ytd-guide-entry-renderer'
-      )
       switch (message.name) {
         case ACTION_HOME:
-          if (menuItems[0]) {
-            menuItems[0].click()
-          } else {
-            location.href = '/'
-          }
-          break
-        case ACTION_TRENDING:
-          if (menuItems[1]) {
-            menuItems[1].click()
-          } else {
-            location.href = '/feed/trending'
-          }
+          clickGuideOrNavigate('/', '/')
           break
         case ACTION_SHORTS:
-          if (menuItems[2]) {
-            menuItems[2].click()
-          } else {
-            location.href = '/shorts'
-          }
+          clickGuideOrNavigate('/shorts', '/shorts')
           break
         case ACTION_SUBSCRIPTIONS:
-          if (menuItems[3]) {
-            menuItems[3].click()
-          } else {
-            location.href = '/feed/subscriptions'
-          }
+          clickGuideOrNavigate('/feed/subscriptions', '/feed/subscriptions')
           break
       }
     }

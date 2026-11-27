@@ -9,6 +9,7 @@ Forked from [`viktorstrate/native-touchbar-addon`](https://github.com/viktorstra
 ## Features
 
 - **Seamless Native Touch Bar Replacement**: Replaces Firefox's default Touch Bar cleanly without an extra `(×)` close box or Control Strip globe icon (with optional Full-width mode in Settings).
+- **Dark Glass Touch Bar UI & Spring Motion**: Custom `CALayer` dark glass buttons with specular rim highlights, continuous squircle corners, interruptible `CASpringAnimation` touch swell, and smoothly sliding tab selection pill (with Classic macOS fallback toggle).
 - **Microsoft Edge-Style Tab Scrubber**: Compact navigation (`< | >` segmented history + `↻` reload), real tab favicons rendered in `NSScrubber`, smart compact tiles when `>= 5` tabs are open, audio/mute/pin badges, and `+` New Tab.
 - **Media ↔ Tabs Switch Button**: 1-tap toggle between active/background playing media (YouTube, HTML5 media) and the Open Tabs scrubber without losing playback progress.
 - **Smart Auto-Show & Auto-Dismiss**: Automatically shows the Touch Bar when Firefox is active with an open window, and automatically hides it when switching apps, hiding (`Cmd+H`), or closing all Firefox windows (`×` / `Cmd+W`) without `Cmd+Q`.
@@ -124,14 +125,6 @@ npm run package:source  # -> web-ext-artifacts/touchbar_addon_for_firefox-0.2.1-
 For AMO Unlisted/Listed signing CLI commands (`npm run sign:unlisted`, `npm run sign:listed`) and reviewer notes, see [`AMO_SUBMISSION.md`](./AMO_SUBMISSION.md).
 
 > Note: The Gecko add-on ID in [`browser-addon/static/manifest.json`](./browser-addon/static/manifest.json) (`touchbar-addon-new-ff@visioncrizzal.github.com`) must match `allowed_extensions` in `~/Library/Application Support/Mozilla/NativeMessagingHosts/touchbar_browser_helper.json`.
-
----
-
-## Known Issues & Future Fixes
-
-The following legacy site-packet issue from the upstream 2020 fork is tracked for upcoming releases (`v0.2.2+`):
-
-- **YouTube `Trending` button obsolete ([`youtube.touchbar-packet`](./browser-addon/src/touchbar-packets/youtube.touchbar-packet))**: `setupGeneralNavigation()` on YouTube non-watch pages still shows a `Trending` button (`/feed/trending` / sidebar guide item), even though YouTube has removed the Trending feed. Needs removal or replacement with an active YouTube navigation action.
 
 ---
 

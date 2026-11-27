@@ -22,6 +22,8 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
   var autoPresentOnFocus = true
   var replaceNativeTouchBar = true
   var fullWidthMode = false
+  var useGlassStyle = true
+  var lastLayoutSpecs: [ComponentSpec] = []
   private(set) var isFirefoxFrontmost = false
   private(set) var firefoxHasVisibleWindow = true
 
@@ -74,10 +76,17 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
     }
   }
 
-  func applyConfig(autoPresent: Bool?, replaceNative: Bool?, fullWidth: Bool?) {
+  @discardableResult
+  func applyConfig(
+    autoPresent: Bool?,
+    replaceNative: Bool?,
+    fullWidth: Bool?,
+    glassStyle: Bool? = nil
+  ) -> Bool {
     let presentationModeChanged =
       (replaceNative != nil && replaceNative != replaceNativeTouchBar) ||
       (fullWidth != nil && fullWidth != fullWidthMode)
+    let glassChanged = glassStyle != nil && glassStyle != useGlassStyle
 
     if let autoPresent = autoPresent {
       autoPresentOnFocus = autoPresent
@@ -88,12 +97,15 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
     if let fullWidth = fullWidth {
       fullWidthMode = fullWidth
     }
+    if let glassStyle = glassStyle {
+      useGlassStyle = glassStyle
+    }
 
     TouchBarHideSystemModalCloseButton(replaceNativeTouchBar)
 
     guard shouldShowForFirefox else {
       removeGlobalTouchBarItem()
-      return
+      return glassChanged
     }
 
     if replaceNativeTouchBar {
@@ -105,10 +117,22 @@ final class TouchBarHandler: NSObject, NSTouchBarDelegate {
     if !layoutComponents.isEmpty {
       if presentationModeChanged && touchbarStrip.isVisible {
         NSTouchBar.dismissSystemModalTouchBar(touchbarStrip)
+        isStripPresented = false
         touchbarStripVisible = true
       } else if autoPresentOnFocus && !touchbarStrip.isVisible {
         touchbarStripVisible = true
       }
+    }
+
+    return glassChanged
+  }
+
+  func animateLayoutEntrance() {
+    for component in layoutComponents {
+      if case .spacer = component.component {
+        continue
+      }
+      TouchBarMotion.animateEntrance(component.primaryView?.layer)
     }
   }
 

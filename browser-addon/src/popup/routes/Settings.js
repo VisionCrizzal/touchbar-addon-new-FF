@@ -2,6 +2,11 @@ import { el } from '../dom'
 
 const SETTING_OPTIONS = [
   {
+    key: 'glassStyle',
+    title: 'Dark Glass Touch Bar',
+    description: 'Translucent glass buttons, specular rims, and spring animations',
+  },
+  {
     key: 'replaceNativeTouchBar',
     title: 'Replace Firefox Touch Bar',
     description: 'Hide Firefox default bar and extra Control Strip icon',
@@ -56,21 +61,27 @@ const SETTING_OPTIONS = [
 
 export function renderSettings({ settings, saving, onToggle }) {
   return el(
-    'div',
-    { className: 'settings-container' },
+    'section',
+    { className: 'glass-card settings-container' },
     SETTING_OPTIONS.map(opt =>
       el('label', { className: 'setting-row' }, [
         el('div', { className: 'setting-text' }, [
           el('span', { className: 'setting-title', text: opt.title }),
           el('span', { className: 'setting-description', text: opt.description }),
         ]),
-        el('input', {
-          className: 'setting-toggle',
-          type: 'checkbox',
-          checked: Boolean(settings?.[opt.key]),
-          disabled: saving,
-          onChange: () => onToggle(opt.key),
-        }),
+        el('span', { className: 'switch' }, [
+          el('input', {
+            className: 'sr-only',
+            type: 'checkbox',
+            'data-setting-key': opt.key,
+            checked: Boolean(settings?.[opt.key]),
+            disabled: saving,
+            onChange: event => onToggle(opt.key, event.currentTarget),
+          }),
+          el('span', { className: 'switch-track', 'aria-hidden': 'true' }, [
+            el('span', { className: 'switch-thumb' }),
+          ]),
+        ]),
       ])
     )
   )

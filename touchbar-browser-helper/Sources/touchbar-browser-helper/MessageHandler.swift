@@ -55,12 +55,24 @@ final class MessageHandler: Sendable {
       let autoPresent = message.autoPresent
       let replaceNative = message.replaceNative
       let fullWidth = message.fullWidth
+      let glassStyle = message.glassStyle
       Task { @MainActor in
-        self.touchbarHandler.applyConfig(
+        let glassChanged = self.touchbarHandler.applyConfig(
           autoPresent: autoPresent,
           replaceNative: replaceNative,
-          fullWidth: fullWidth
+          fullWidth: fullWidth,
+          glassStyle: glassStyle
         )
+        if glassChanged && !self.touchbarHandler.lastLayoutSpecs.isEmpty {
+          let components = self.touchbarHandler.lastLayoutSpecs.compactMap {
+            self.generateComponent(
+              spec: $0,
+              glassStyle: self.touchbarHandler.useGlassStyle,
+              browserCommunication: browserCommunication
+            )
+          }
+          self.touchbarHandler.layoutComponents = components
+        }
       }
     default:
       NSLog("Message handler error on type %@: Unknown message type", messageType)
@@ -72,10 +84,32 @@ final class MessageHandler: Sendable {
 
   @MainActor
   func handleChangeLayout(_ layout: [ComponentSpec], browserCommunication: BrowserCommunication) {
+    touchbarHandler.lastLayoutSpecs = layout
+    let existing = touchbarHandler.layoutComponents
+
+    if !layout.isEmpty && existing.count == layout.count &&
+       zip(existing, layout).allSatisfy({ $0.matchesStructure(of: $1) }) {
+      for (component, spec) in zip(existing, layout) {
+        component.applySpecInPlace(spec, animated: true)
+      }
+      if touchbarHandler.shouldShowForFirefox && !touchbarHandler.touchbarStripVisible && touchbarHandler.autoPresentOnFocus {
+        touchbarHandler.touchbarStripVisible = true
+      }
+      return
+    }
+
     let components = layout.compactMap {
-      generateComponent(spec: $0, browserCommunication: browserCommunication)
+      generateComponent(
+        spec: $0,
+        glassStyle: touchbarHandler.useGlassStyle,
+        browserCommunication: browserCommunication
+      )
     }
     touchbarHandler.layoutComponents = components
+
+    if !components.isEmpty && touchbarHandler.shouldShowForFirefox {
+      touchbarHandler.animateLayoutEntrance()
+    }
   }
 
   @MainActor
@@ -88,94 +122,15 @@ final class MessageHandler: Sendable {
       return
     }
 
-    switch component.component {
-    case .button:
-      let bezelHex = values.bezelColor ?? values.color
-      let resolvedImage =
-        (values.symbol != nil || values.icon != nil)
-        ? resolveTouchBarImage(
-          symbol: values.symbol,
-          icon: values.icon,
-          accessibilityDescription: values.label ?? name
-        )
-        : nil
-
-      if let buttonItem = component.touchBarItem as? NSButtonTouchBarItem {
-        if let newLabel = values.label {
-          buttonItem.title = newLabel
-        }
-        if let resolvedImage = resolvedImage {
-          buttonItem.image = resolvedImage
-        }
-        if let bezelHex = bezelHex {
-          buttonItem.bezelColor = bezelHex.isEmpty ? nil : NSColor.from(hex: bezelHex)
-        }
-        if let enabled = values.enabled {
-          buttonItem.isEnabled = enabled
-        }
-      } else if let customItem = component.touchBarItem as? NSCustomTouchBarItem,
-                let button = customItem.view as? NSButton {
-        if let newLabel = values.label {
-          button.title = newLabel
-        }
-        if let resolvedImage = resolvedImage {
-          button.image = resolvedImage
-        }
-        if let bezelHex = bezelHex {
-          button.bezelColor = bezelHex.isEmpty ? nil : NSColor.from(hex: bezelHex)
-        }
-        if let enabled = values.enabled {
-          button.isEnabled = enabled
-        }
-      }
-
-    case .slider:
-      guard let slider = component.touchBarItem as? NSSliderTouchBarItem else {
-        return
-      }
-
-      if let newValue = values.value, newValue.isFinite {
-        slider.slider.doubleValue = min(max(newValue, 0.0), 1.0)
-      }
-
-      if let newLabel = values.label {
-        slider.label = newLabel
-      }
-
-      if let newColor = values.color {
-        slider.slider.trackFillColor = NSColor.from(hex: newColor)
-      }
-
-    case .label:
-      guard let customItem = component.touchBarItem as? NSCustomTouchBarItem,
-            let textField = customItem.view as? NSTextField else {
-        return
-      }
-
-      if let newLabel = values.label {
-        textField.stringValue = newLabel
-      }
-
-      if let newColor = values.color {
-        textField.textColor = NSColor.from(hex: newColor) ?? .labelColor
-      }
-
-    case .scrubber:
-      if values.items != nil || values.selectedIndex != nil {
-        _ = component.touchBarItem
-        component.scrubberController?.update(
-          items: values.items,
-          selectedIndex: values.selectedIndex
-        )
-      }
-
-    case .spacer, .popover, .segmented:
-      break
-    }
+    component.applyUpdateValues(values)
   }
 
   @MainActor
-  func generateComponent(spec: ComponentSpec, browserCommunication: BrowserCommunication) -> TouchBarComponent? {
+  func generateComponent(
+    spec: ComponentSpec,
+    glassStyle: Bool,
+    browserCommunication: BrowserCommunication
+  ) -> TouchBarComponent? {
     guard let type = spec.type, let name = spec.name else {
       return nil
     }
@@ -194,6 +149,7 @@ final class MessageHandler: Sendable {
           enabled: spec.enabled ?? true,
           width: width
         ),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
@@ -203,6 +159,7 @@ final class MessageHandler: Sendable {
       return TouchBarComponent(
         name: name,
         component: .slider(label: spec.label, value: value, color: color),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
@@ -211,22 +168,16 @@ final class MessageHandler: Sendable {
       return TouchBarComponent(
         name: name,
         component: .label(text: spec.label ?? "", color: color),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
     case "spacer":
-      let spacerSize: TouchBarComponent.SpacerSize
-      switch spec.size {
-      case "large":
-        spacerSize = .large
-      case "flexible":
-        spacerSize = .flexible
-      default:
-        spacerSize = .small
-      }
+      let spacerSize = TouchBarComponent.SpacerSize.from(spec.size)
       return TouchBarComponent(
         name: name,
         component: .spacer(size: spacerSize),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
@@ -234,13 +185,18 @@ final class MessageHandler: Sendable {
       return TouchBarComponent(
         name: name,
         component: .scrubber(items: spec.items ?? [], selectedIndex: spec.selectedIndex),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
     case "popover":
       let bezelColor = (spec.bezelColor ?? spec.color).flatMap { NSColor.from(hex: $0) }
       let children = (spec.popoverItems ?? []).compactMap {
-        generateComponent(spec: $0, browserCommunication: browserCommunication)
+        generateComponent(
+          spec: $0,
+          glassStyle: glassStyle,
+          browserCommunication: browserCommunication
+        )
       }
       return TouchBarComponent(
         name: name,
@@ -251,6 +207,7 @@ final class MessageHandler: Sendable {
           bezelColor: bezelColor,
           children: children
         ),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 
@@ -258,6 +215,7 @@ final class MessageHandler: Sendable {
       return TouchBarComponent(
         name: name,
         component: .segmented(segments: spec.segments ?? []),
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
 

@@ -91,6 +91,7 @@ export const loadNativePort = ({ nativePort, settings }) => {
     autoPresent: settings?.autoPresent ?? true,
     replaceNative: settings?.replaceNativeTouchBar ?? true,
     fullWidth: settings?.fullWidthMode ?? false,
+    glassStyle: settings?.glassStyle ?? true,
   })
   nativePort.postMessage({ type: 'ping' })
   tabManagement.refreshTouchbarForActiveTab()

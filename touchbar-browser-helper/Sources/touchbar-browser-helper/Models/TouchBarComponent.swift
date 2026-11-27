@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import QuartzCore
 
 @MainActor
 final class FaviconCache {
@@ -59,6 +60,7 @@ func resolveTouchBarImage(
 
 @MainActor
 final class TabScrubberItemView: NSScrubberItemView {
+  private let glassLayer = GlassSurfaceLayer()
   private let faviconView = NSImageView()
   private let label = NSTextField(labelWithString: "")
   private let badgeView = NSImageView()
@@ -66,7 +68,11 @@ final class TabScrubberItemView: NSScrubberItemView {
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
     wantsLayer = true
-    layer?.cornerRadius = 6
+    layer?.cornerRadius = 7
+    layer?.cornerCurve = .continuous
+
+    glassLayer.isSubtle = true
+    layer?.insertSublayer(glassLayer, at: 0)
 
     faviconView.imageScaling = .scaleProportionallyDown
     faviconView.setContentHuggingPriority(.required, for: .horizontal)
@@ -112,7 +118,15 @@ final class TabScrubberItemView: NSScrubberItemView {
     fatalError("init(coder:) has not been implemented")
   }
 
-  func configure(item: ScrubberItemSpec, showTitle: Bool) {
+  override func layout() {
+    super.layout()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    glassLayer.frame = bounds
+    CATransaction.commit()
+  }
+
+  func configure(item: ScrubberItemSpec, showTitle: Bool, glassStyle: Bool) {
     if let faviconBase64 = item.favicon,
        let favImage = FaviconCache.image(forBase64: faviconBase64) {
       faviconView.image = favImage
@@ -158,14 +172,25 @@ final class TabScrubberItemView: NSScrubberItemView {
     }
 
     let isActive = item.active == true
-    layer?.backgroundColor = NSColor(white: 1.0, alpha: isActive ? 0.24 : 0.10).cgColor
-    if isActive {
-      layer?.borderWidth = 1.0
-      layer?.borderColor = NSColor(white: 1.0, alpha: 0.35).cgColor
-    } else {
+    if glassStyle {
+      // Active item highlights via GlassScrubberSelectionView sliding underneath.
+      glassLayer.isHidden = isActive
+      glassLayer.isSubtle = true
+      layer?.backgroundColor = nil
       layer?.borderWidth = 0.0
       layer?.borderColor = nil
+    } else {
+      glassLayer.isHidden = true
+      layer?.backgroundColor = NSColor(white: 1.0, alpha: isActive ? 0.24 : 0.10).cgColor
+      if isActive {
+        layer?.borderWidth = 1.0
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.35).cgColor
+      } else {
+        layer?.borderWidth = 0.0
+        layer?.borderColor = nil
+      }
     }
+
     label.font = NSFont.systemFont(ofSize: 12.5, weight: isActive ? .semibold : .regular)
   }
 }
@@ -181,6 +206,7 @@ final class ScrubberTouchBarController:
 
   let name: String
   private var items: [ScrubberItemSpec]
+  private let glassStyle: Bool
   private let browserCommunication: BrowserCommunication
   private var isUpdatingSelection = false
   let scrubber: NSScrubber
@@ -189,10 +215,12 @@ final class ScrubberTouchBarController:
     name: String,
     items: [ScrubberItemSpec],
     selectedIndex: Int?,
+    glassStyle: Bool,
     browserCommunication: BrowserCommunication
   ) {
     self.name = name
     self.items = items
+    self.glassStyle = glassStyle
     self.browserCommunication = browserCommunication
 
     let scrubber = NSScrubber()
@@ -200,7 +228,7 @@ final class ScrubberTouchBarController:
     layout.itemSpacing = 6
     scrubber.scrubberLayout = layout
     scrubber.mode = .free
-    scrubber.selectionBackgroundStyle = .roundedBackground
+    scrubber.selectionBackgroundStyle = glassStyle ? GlassScrubberSelectionStyle() : .roundedBackground
     scrubber.showsAdditionalContentIndicators = true
     scrubber.register(TabScrubberItemView.self, forItemIdentifier: Self.itemIdentifier)
     scrubber.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -212,19 +240,57 @@ final class ScrubberTouchBarController:
     scrubber.dataSource = self
     scrubber.delegate = self
 
-    applySelection(selectedIndex)
+    applySelection(selectedIndex, animated: false)
   }
 
-  func update(items: [ScrubberItemSpec]?, selectedIndex: Int?) {
+  func update(items: [ScrubberItemSpec]?, selectedIndex: Int?, animated: Bool = true) {
     isUpdatingSelection = true
     defer { isUpdatingSelection = false }
 
-    if let items = items {
-      self.items = items
-      scrubber.reloadData()
+    guard let newItems = items else {
+      applySelection(selectedIndex, animated: animated)
+      return
     }
 
-    applySelection(selectedIndex)
+    let oldIds = self.items.map(\.id)
+    let newIds = newItems.map(\.id)
+
+    if oldIds == newIds {
+      var changedIndices = IndexSet()
+      let countChanged = self.items.count != newItems.count
+      for idx in 0..<newItems.count where self.items[idx] != newItems[idx] {
+        changedIndices.insert(idx)
+      }
+      self.items = newItems
+
+      if animated && !TouchBarMotion.reduceMotion && !countChanged {
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = 0.22
+          context.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1.0, 0.32, 1.0)
+          context.allowsImplicitAnimation = true
+          if !changedIndices.isEmpty {
+            scrubber.reloadItems(at: changedIndices)
+          }
+          scrubber.scrubberLayout.invalidateLayout()
+          if let idx = selectedIndex, idx >= 0, idx < newItems.count {
+            scrubber.animator().selectedIndex = idx
+            scrubber.animator().scrollItem(at: idx, to: .center)
+          } else {
+            scrubber.selectedIndex = -1
+          }
+        }
+      } else {
+        if !changedIndices.isEmpty {
+          scrubber.reloadItems(at: changedIndices)
+        }
+        scrubber.scrubberLayout.invalidateLayout()
+        applySelection(selectedIndex, animated: false)
+      }
+    } else {
+      self.items = newItems
+      scrubber.reloadData()
+      applySelection(selectedIndex, animated: false)
+    }
   }
 
   private func shouldShowTitle(for index: Int) -> Bool {
@@ -232,13 +298,23 @@ final class ScrubberTouchBarController:
     return items.count <= 4 || items[index].active == true
   }
 
-  private func applySelection(_ selectedIndex: Int?) {
+  private func applySelection(_ selectedIndex: Int?, animated: Bool) {
     isUpdatingSelection = true
     defer { isUpdatingSelection = false }
 
     if let idx = selectedIndex, idx >= 0, idx < items.count {
-      scrubber.selectedIndex = idx
-      scrubber.scrollItem(at: idx, to: .center)
+      if animated && !TouchBarMotion.reduceMotion {
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = 0.22
+          context.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1.0, 0.32, 1.0)
+          context.allowsImplicitAnimation = true
+          scrubber.animator().selectedIndex = idx
+          scrubber.animator().scrollItem(at: idx, to: .center)
+        }
+      } else {
+        scrubber.selectedIndex = idx
+        scrubber.scrollItem(at: idx, to: .center)
+      }
     } else {
       scrubber.selectedIndex = -1
     }
@@ -254,7 +330,11 @@ final class ScrubberTouchBarController:
       ?? TabScrubberItemView()
 
     if index >= 0 && index < items.count {
-      view.configure(item: items[index], showTitle: shouldShowTitle(for: index))
+      view.configure(
+        item: items[index],
+        showTitle: shouldShowTitle(for: index),
+        glassStyle: glassStyle
+      )
     }
     return view
   }
@@ -314,10 +394,21 @@ final class PopoverBarDelegate: NSObject, NSTouchBarDelegate {
 
 @MainActor
 final class TouchBarComponent: NSObject {
-  enum SpacerSize {
+  enum SpacerSize: Equatable {
     case small
     case large
     case flexible
+
+    static func from(_ raw: String?) -> SpacerSize {
+      switch raw {
+      case "large":
+        return .large
+      case "flexible":
+        return .flexible
+      default:
+        return .small
+      }
+    }
   }
 
   enum Component {
@@ -345,16 +436,37 @@ final class TouchBarComponent: NSObject {
 
   let name: String
   let identifier: NSTouchBarItem.Identifier
-  let component: Component
+  let glassStyle: Bool
+  private(set) var component: Component
   private let browserCommunication: BrowserCommunication
+  private let originalWidth: CGFloat?
 
   var scrubberController: ScrubberTouchBarController?
   private var popoverDelegate: PopoverBarDelegate?
+  private var glassButton: GlassTouchBarButton?
+  private var glassSegmented: GlassSegmentedView?
+  private var glassSlider: GlassSliderView?
 
-  init(name: String, component: Component, browserCommunication: BrowserCommunication) {
+  var primaryView: NSView? {
+    touchBarItem.view
+  }
+
+  init(
+    name: String,
+    component: Component,
+    glassStyle: Bool = true,
+    browserCommunication: BrowserCommunication
+  ) {
     self.name = name
     self.component = component
+    self.glassStyle = glassStyle
     self.browserCommunication = browserCommunication
+
+    if case .button(_, _, _, _, _, let width) = component {
+      self.originalWidth = width
+    } else {
+      self.originalWidth = nil
+    }
 
     switch component {
     case .spacer(let size):
@@ -384,6 +496,23 @@ final class TouchBarComponent: NSObject {
       )
 
       let effectiveWidth: CGFloat? = width ?? ((label.isEmpty && image != nil) ? 38.0 : nil)
+
+      if glassStyle {
+        let customItem = NSCustomTouchBarItem(identifier: identifier)
+        let button = GlassTouchBarButton(
+          label: label,
+          image: image,
+          bezelColor: bezelColor,
+          enabled: enabled,
+          width: effectiveWidth
+        )
+        button.onAction = { [weak self] in
+          self?.triggerButtonAction()
+        }
+        self.glassButton = button
+        customItem.view = button
+        return customItem
+      }
 
       if let effectiveWidth = effectiveWidth {
         let customItem = NSCustomTouchBarItem(identifier: identifier)
@@ -437,6 +566,20 @@ final class TouchBarComponent: NSObject {
       return buttonItem
 
     case .slider(let label, let value, let color):
+      if glassStyle {
+        let customItem = NSCustomTouchBarItem(identifier: identifier)
+        let sliderView = GlassSliderView(
+          label: label,
+          value: value,
+          color: color,
+          target: self,
+          action: #selector(sliderControlAction(_:))
+        )
+        self.glassSlider = sliderView
+        customItem.view = sliderView
+        return customItem
+      }
+
       let sliderItem = NSSliderTouchBarItem(identifier: identifier)
       sliderItem.target = self
       sliderItem.action = #selector(sliderAction(_:))
@@ -471,6 +614,7 @@ final class TouchBarComponent: NSObject {
         name: name,
         items: items,
         selectedIndex: selectedIndex,
+        glassStyle: glassStyle,
         browserCommunication: browserCommunication
       )
       self.scrubberController = controller
@@ -503,6 +647,16 @@ final class TouchBarComponent: NSObject {
 
     case .segmented(let segments):
       let customItem = NSCustomTouchBarItem(identifier: identifier)
+      if glassStyle {
+        let segView = GlassSegmentedView(segments: segments)
+        segView.onSelectSegment = { [weak self] idx in
+          self?.triggerSegmentedAction(at: idx)
+        }
+        self.glassSegmented = segView
+        customItem.view = segView
+        return customItem
+      }
+
       let seg = NSSegmentedControl()
       seg.segmentCount = segments.count
       seg.trackingMode = .momentary
@@ -531,32 +685,269 @@ final class TouchBarComponent: NSObject {
     }
   }()
 
-  @objc func buttonAction(_ sender: Any?) {
-    guard case .button = component else {
-      return
+  func matchesStructure(of spec: ComponentSpec) -> Bool {
+    guard spec.name == name, let type = spec.type else {
+      return false
     }
 
+    switch component {
+    case .button:
+      let specWidth = spec.width.map { CGFloat($0) }
+      return type == "button" && specWidth == originalWidth
+    case .segmented(let existingSegments):
+      guard type == "segmented" else { return false }
+      return existingSegments.map(\.name) == (spec.segments ?? []).map(\.name)
+    case .slider:
+      return type == "slider"
+    case .label:
+      return type == "label"
+    case .scrubber:
+      return type == "scrubber"
+    case .spacer(let size):
+      return type == "spacer" && SpacerSize.from(spec.size) == size
+    case .popover:
+      return false
+    }
+  }
+
+  func applySpecInPlace(_ spec: ComponentSpec, animated: Bool) {
+    switch component {
+    case .button:
+      let label = spec.label ?? ""
+      let bezelColor = (spec.bezelColor ?? spec.color).flatMap { NSColor.from(hex: $0) }
+      let enabled = spec.enabled ?? true
+      let width = spec.width.map { CGFloat($0) }
+      component = .button(
+        label: label,
+        icon: spec.icon,
+        symbol: spec.symbol,
+        bezelColor: bezelColor,
+        enabled: enabled,
+        width: width
+      )
+      let image = resolveTouchBarImage(
+        symbol: spec.symbol,
+        icon: spec.icon,
+        accessibilityDescription: label.isEmpty ? name : label
+      )
+      if let glassButton = glassButton {
+        glassButton.configure(
+          label: label,
+          image: image,
+          bezelColor: bezelColor,
+          enabled: enabled,
+          animated: animated
+        )
+      } else if let buttonItem = touchBarItem as? NSButtonTouchBarItem {
+        buttonItem.title = label
+        buttonItem.image = image
+        buttonItem.bezelColor = bezelColor
+        buttonItem.isEnabled = enabled
+      } else if let customItem = touchBarItem as? NSCustomTouchBarItem,
+                let button = customItem.view as? NSButton {
+        button.title = label
+        button.image = image
+        button.bezelColor = bezelColor
+        button.isEnabled = enabled
+      }
+
+    case .segmented:
+      let segments = spec.segments ?? []
+      component = .segmented(segments: segments)
+      if let glassSegmented = glassSegmented {
+        glassSegmented.update(segments: segments, animated: animated)
+      } else if let customItem = touchBarItem as? NSCustomTouchBarItem,
+                let seg = customItem.view as? NSSegmentedControl {
+        for (idx, segSpec) in segments.enumerated() where idx < seg.segmentCount {
+          let img = resolveTouchBarImage(
+            symbol: segSpec.symbol,
+            icon: segSpec.icon,
+            accessibilityDescription: segSpec.label ?? segSpec.name
+          )
+          seg.setImage(img, forSegment: idx)
+          seg.setLabel(segSpec.label ?? "", forSegment: idx)
+          seg.setEnabled(segSpec.enabled ?? true, forSegment: idx)
+        }
+      }
+
+    case .slider:
+      let value = (spec.value?.isFinite == true) ? (spec.value ?? 0.0) : 0.0
+      let color = spec.color.flatMap { NSColor.from(hex: $0) }
+      component = .slider(label: spec.label, value: value, color: color)
+      if let glassSlider = glassSlider {
+        glassSlider.update(label: spec.label, value: value, color: color, resetColorIfNil: true)
+      } else if let sliderItem = touchBarItem as? NSSliderTouchBarItem {
+        sliderItem.label = spec.label
+        sliderItem.slider.doubleValue = min(max(value, 0.0), 1.0)
+        sliderItem.slider.trackFillColor = color
+      }
+
+    case .label:
+      let text = spec.label ?? ""
+      let color = spec.color.flatMap { NSColor.from(hex: $0) }
+      component = .label(text: text, color: color)
+      if let customItem = touchBarItem as? NSCustomTouchBarItem,
+         let textField = customItem.view as? NSTextField {
+        textField.stringValue = text
+        textField.textColor = color ?? .labelColor
+      }
+
+    case .scrubber:
+      let items = spec.items ?? []
+      component = .scrubber(items: items, selectedIndex: spec.selectedIndex)
+      _ = touchBarItem
+      scrubberController?.update(items: items, selectedIndex: spec.selectedIndex, animated: animated)
+
+    case .spacer, .popover:
+      break
+    }
+  }
+
+  func applyUpdateValues(_ values: ComponentUpdateValues) {
+    switch component {
+    case .button(let oldLabel, let oldIcon, let oldSymbol, let oldBezelColor, let oldEnabled, let width):
+      let bezelHex = values.bezelColor ?? values.color
+      let updatedLabel = values.label ?? oldLabel
+      let updatedSymbol = values.symbol ?? oldSymbol
+      let updatedIcon = values.icon ?? oldIcon
+      let updatedBezelColor: NSColor? = bezelHex.map { $0.isEmpty ? nil : NSColor.from(hex: $0) } ?? oldBezelColor
+      let updatedEnabled = values.enabled ?? oldEnabled
+
+      component = .button(
+        label: updatedLabel,
+        icon: updatedIcon,
+        symbol: updatedSymbol,
+        bezelColor: updatedBezelColor,
+        enabled: updatedEnabled,
+        width: width
+      )
+
+      let resolvedImage =
+        (values.symbol != nil || values.icon != nil)
+        ? resolveTouchBarImage(
+          symbol: updatedSymbol,
+          icon: updatedIcon,
+          accessibilityDescription: updatedLabel.isEmpty ? name : updatedLabel
+        )
+        : nil
+
+      if let glassButton = glassButton {
+        let finalImage = resolvedImage ?? resolveTouchBarImage(
+          symbol: updatedSymbol,
+          icon: updatedIcon,
+          accessibilityDescription: updatedLabel.isEmpty ? name : updatedLabel
+        )
+        glassButton.configure(
+          label: updatedLabel,
+          image: finalImage,
+          bezelColor: updatedBezelColor,
+          enabled: updatedEnabled,
+          animated: true
+        )
+      } else if let buttonItem = touchBarItem as? NSButtonTouchBarItem {
+        if let newLabel = values.label {
+          buttonItem.title = newLabel
+        }
+        if let resolvedImage = resolvedImage {
+          buttonItem.image = resolvedImage
+        }
+        if let bezelHex = bezelHex {
+          buttonItem.bezelColor = bezelHex.isEmpty ? nil : NSColor.from(hex: bezelHex)
+        }
+        if let enabled = values.enabled {
+          buttonItem.isEnabled = enabled
+        }
+      } else if let customItem = touchBarItem as? NSCustomTouchBarItem,
+                let button = customItem.view as? NSButton {
+        if let newLabel = values.label {
+          button.title = newLabel
+        }
+        if let resolvedImage = resolvedImage {
+          button.image = resolvedImage
+        }
+        if let bezelHex = bezelHex {
+          button.bezelColor = bezelHex.isEmpty ? nil : NSColor.from(hex: bezelHex)
+        }
+        if let enabled = values.enabled {
+          button.isEnabled = enabled
+        }
+      }
+
+    case .slider:
+      let newColor = values.color.flatMap { NSColor.from(hex: $0) }
+      if let glassSlider = glassSlider {
+        glassSlider.update(label: values.label, value: values.value, color: newColor)
+      } else if let slider = touchBarItem as? NSSliderTouchBarItem {
+        if let newValue = values.value, newValue.isFinite {
+          slider.slider.doubleValue = min(max(newValue, 0.0), 1.0)
+        }
+        if let newLabel = values.label {
+          slider.label = newLabel
+        }
+        if let newColor = newColor {
+          slider.slider.trackFillColor = newColor
+        }
+      }
+
+    case .label:
+      guard let customItem = touchBarItem as? NSCustomTouchBarItem,
+            let textField = customItem.view as? NSTextField else {
+        return
+      }
+      if let newLabel = values.label {
+        textField.stringValue = newLabel
+      }
+      if let newColor = values.color {
+        textField.textColor = NSColor.from(hex: newColor) ?? .labelColor
+      }
+
+    case .scrubber:
+      if values.items != nil || values.selectedIndex != nil {
+        _ = touchBarItem
+        scrubberController?.update(
+          items: values.items,
+          selectedIndex: values.selectedIndex,
+          animated: true
+        )
+      }
+
+    case .spacer, .popover, .segmented:
+      break
+    }
+  }
+
+  private func triggerButtonAction() {
+    guard case .button = component else { return }
     NSLog("Button action: %@", name)
     browserCommunication.sendMessage(ButtonActionMessage(name: name))
   }
 
-  @objc func segmentedAction(_ sender: NSSegmentedControl) {
-    guard case .segmented(let segments) = component else {
-      return
-    }
-
-    let idx = sender.selectedSegment
-    guard idx >= 0 && idx < segments.count else {
-      return
-    }
-
+  private func triggerSegmentedAction(at idx: Int) {
+    guard case .segmented(let segments) = component else { return }
+    guard idx >= 0 && idx < segments.count else { return }
     let targetName = segments[idx].name
     NSLog("Segmented action: %@", targetName)
     browserCommunication.sendMessage(ButtonActionMessage(name: targetName))
   }
 
+  @objc func buttonAction(_ sender: Any?) {
+    triggerButtonAction()
+  }
+
+  @objc func segmentedAction(_ sender: NSSegmentedControl) {
+    triggerSegmentedAction(at: sender.selectedSegment)
+  }
+
   @objc func sliderAction(_ sender: NSSliderTouchBarItem) {
     let value = sender.slider.doubleValue
+    NSLog("Slider action: %@ value=%.4f", name, value)
+    browserCommunication.sendMessage(
+      SliderActionMessage(name: name, value: value)
+    )
+  }
+
+  @objc func sliderControlAction(_ sender: NSSlider) {
+    let value = sender.doubleValue
     NSLog("Slider action: %@ value=%.4f", name, value)
     browserCommunication.sendMessage(
       SliderActionMessage(name: name, value: value)

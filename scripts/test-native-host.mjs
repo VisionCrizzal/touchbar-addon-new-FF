@@ -91,20 +91,20 @@ async function run() {
   sendFrame(proc, { type: 'ping' })
   const pong = await readFrame()
   assert.deepEqual(pong, { type: 'ping', success: true, value: 'pong' })
-  console.log('PASS 1/7: ping -> pong')
+  console.log('PASS 1/8: ping -> pong')
 
   // 2. malformed JSON -> success: false
   sendFrame(proc, '{not-json')
   const malformed = await readFrame()
   assert.equal(malformed.success, false)
-  console.log('PASS 2/7: malformed JSON -> error response')
+  console.log('PASS 2/8: malformed JSON -> error response')
 
   // 3. unknown type -> success: false
   sendFrame(proc, { type: 'unknown_type' })
   const unknown = await readFrame()
   assert.equal(unknown.type, 'unknown_type')
   assert.equal(unknown.success, false)
-  console.log('PASS 3/7: unknown type -> error response')
+  console.log('PASS 3/8: unknown type -> error response')
 
   // 4. Phase 1 slider null + update + dismiss
   sendFrame(proc, {
@@ -123,70 +123,118 @@ async function run() {
   sendFrame(proc, { type: 'ping' })
   const followUp1 = await readFrame()
   assert.deepEqual(followUp1, { type: 'ping', success: true, value: 'pong' })
-  console.log('PASS 4/7: null slider layout, update_item, dismiss_touchbar')
+  console.log('PASS 4/8: null slider layout, update_item, dismiss_touchbar')
 
-  // 5. Edge clone config (replaceNative + fullWidth toggle) + segmented + compact buttons + favicon scrubber
+  // 5. Edge clone config (glassStyle + replaceNative + fullWidth) + segmented + compact buttons + favicon scrubber
   sendFrame(proc, {
     type: 'set_config',
     autoPresent: true,
     replaceNative: true,
     fullWidth: false,
+    glassStyle: true,
   })
-  sendFrame(proc, {
-    type: 'change_layout',
-    layout: [
-      {
-        type: 'segmented',
-        name: '__global_nav_history',
-        segments: [
-          { name: '__global_back', symbol: 'chevron.left', width: 34, enabled: true },
-          { name: '__global_forward', symbol: 'chevron.right', width: 34, enabled: false },
-        ],
-      },
-      {
-        type: 'button',
-        name: '__global_reload',
-        label: '',
-        symbol: 'arrow.clockwise',
-        width: 36,
-      },
-      { type: 'spacer', name: '__global_sep', size: 'small' },
-      {
-        type: 'scrubber',
-        name: '__global_tabs',
-        selectedIndex: 1,
-        items: [
-          { id: '1', label: 'Mozilla', favicon: SAMPLE_FAVICON_PNG, active: false },
-          {
-            id: '2',
-            label: 'YouTube',
-            favicon: SAMPLE_FAVICON_PNG,
-            symbol: 'speaker.wave.2.fill',
-            active: true,
-          },
-          { id: '3', label: 'GitHub', active: false },
-          { id: '4', label: 'Docs', active: false },
-          { id: '5', label: 'Inbox', symbol: 'pin.fill', active: false },
-        ],
-      },
-      {
-        type: 'button',
-        name: '__global_new_tab',
-        label: '',
-        symbol: 'plus',
-        width: 36,
-      },
-    ],
-  })
+  const globalLayoutBase = [
+    {
+      type: 'segmented',
+      name: '__global_nav_history',
+      segments: [
+        { name: '__global_back', symbol: 'chevron.left', width: 34, enabled: true },
+        { name: '__global_forward', symbol: 'chevron.right', width: 34, enabled: false },
+      ],
+    },
+    {
+      type: 'button',
+      name: '__global_reload',
+      label: '',
+      symbol: 'arrow.clockwise',
+      width: 36,
+    },
+    { type: 'spacer', name: '__global_sep', size: 'small' },
+    {
+      type: 'scrubber',
+      name: '__global_tabs',
+      selectedIndex: 1,
+      items: [
+        { id: '1', label: 'Mozilla', favicon: SAMPLE_FAVICON_PNG, active: false },
+        {
+          id: '2',
+          label: 'YouTube',
+          favicon: SAMPLE_FAVICON_PNG,
+          symbol: 'speaker.wave.2.fill',
+          active: true,
+        },
+        { id: '3', label: 'GitHub', active: false },
+        { id: '4', label: 'Docs', active: false },
+        { id: '5', label: 'Inbox', symbol: 'pin.fill', active: false },
+      ],
+    },
+    {
+      type: 'button',
+      name: '__global_new_tab',
+      label: '',
+      symbol: 'plus',
+      width: 36,
+    },
+  ]
+  sendFrame(proc, { type: 'change_layout', layout: globalLayoutBase })
   sendFrame(proc, {
     type: 'set_config',
     autoPresent: true,
     replaceNative: true,
     fullWidth: true,
+    glassStyle: true,
   })
-  console.log('PASS 5/7: set_config (replaceNative/fullWidth) + segmented + compact buttons + favicon scrubber')
+  console.log('PASS 5/8: Dark Glass config (glassStyle/replaceNative/fullWidth) + segmented + scrubber')
 
-  // 6. Update scrubber + switch to compact media layout + follow-up ping
+  // 6. In-place layout reconciliation (same structure -> animated pill slide & button update) + glassStyle toggle
+  const switchedTabLayout = [
+    {
+      type: 'segmented',
+      name: '__global_nav_history',
+      segments: [
+        { name: '__global_back', symbol: 'chevron.left', width: 34, enabled: true },
+        { name: '__global_forward', symbol: 'chevron.right', width: 34, enabled: true },
+      ],
+    },
+    {
+      type: 'button',
+      name: '__global_reload',
+      label: '',
+      symbol: 'xmark',
+      width: 36,
+    },
+    { type: 'spacer', name: '__global_sep', size: 'small' },
+    {
+      type: 'scrubber',
+      name: '__global_tabs',
+      selectedIndex: 0,
+      items: [
+        { id: '1', label: 'Mozilla', favicon: SAMPLE_FAVICON_PNG, active: true },
+        { id: '2', label: 'YouTube', favicon: SAMPLE_FAVICON_PNG, symbol: 'speaker.wave.2.fill', active: false },
+        { id: '3', label: 'GitHub', active: false },
+        { id: '4', label: 'Docs', active: false },
+        { id: '5', label: 'Inbox', symbol: 'pin.fill', active: false },
+      ],
+    },
+    {
+      type: 'button',
+      name: '__global_new_tab',
+      label: '',
+      symbol: 'plus',
+      width: 36,
+    },
+  ]
+  sendFrame(proc, { type: 'change_layout', layout: switchedTabLayout })
+  sendFrame(proc, {
+    type: 'update_item',
+    name: '__global_reload',
+    values: { symbol: 'arrow.clockwise' },
+  })
+  sendFrame(proc, { type: 'set_config', glassStyle: false })
+  sendFrame(proc, { type: 'set_config', glassStyle: true })
+  console.log('PASS 6/8: in-place layout reconciliation + glassStyle toggle (false -> true)')
+
+  // 7. Update scrubber count + switch to compact media layout + GlassSlider update + follow-up ping
   sendFrame(proc, {
     type: 'update_item',
     name: '__global_tabs',
@@ -217,13 +265,18 @@ async function run() {
       },
     ],
   })
+  sendFrame(proc, {
+    type: 'update_item',
+    name: 'playback-slider',
+    values: { label: '2:10', value: 0.65 },
+  })
   sendFrame(proc, { type: 'dismiss_touchbar' })
   sendFrame(proc, { type: 'ping' })
   const followUp2 = await readFrame()
   assert.deepEqual(followUp2, { type: 'ping', success: true, value: 'pong' })
-  console.log('PASS 6/7: scrubber favicon update + compact media layout + follow-up ping')
+  console.log('PASS 7/8: scrubber shrink + media layout transition + GlassSlider update + ping')
 
-  // 7. EOF clean exit within 3s
+  // 8. EOF clean exit within 3s
   const startMs = Date.now()
   proc.stdin.end()
 
@@ -236,7 +289,7 @@ async function run() {
   const elapsedMs = Date.now() - startMs
   assert.equal(exitResult.code, 0, `Expected exit code 0, got ${JSON.stringify(exitResult)}; stderr=${stderrLog}`)
   assert.equal(exitResult.signal, null)
-  console.log(`PASS 7/7: EOF clean exit with code 0 in ${elapsedMs}ms`)
+  console.log(`PASS 8/8: EOF clean exit with code 0 in ${elapsedMs}ms`)
 }
 
 run().catch(err => {

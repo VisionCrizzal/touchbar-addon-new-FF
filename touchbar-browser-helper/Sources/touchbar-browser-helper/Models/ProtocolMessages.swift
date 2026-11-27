@@ -13,9 +13,10 @@ struct IncomingMessage: Decodable, Sendable {
   let autoPresent: Bool?
   let replaceNative: Bool?
   let fullWidth: Bool?
+  let glassStyle: Bool?
 }
 
-struct ScrubberItemSpec: Decodable, Sendable {
+struct ScrubberItemSpec: Decodable, Equatable, Sendable {
   let id: String
   let label: String
   let symbol: String?
@@ -23,7 +24,7 @@ struct ScrubberItemSpec: Decodable, Sendable {
   let active: Bool?
 }
 
-struct SegmentSpec: Decodable, Sendable {
+struct SegmentSpec: Decodable, Equatable, Sendable {
   let name: String
   let label: String?
   let symbol: String?

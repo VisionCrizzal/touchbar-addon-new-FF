@@ -1,13 +1,13 @@
 import { el } from '../dom'
 
 const HELPER_SETUP_URL =
-  'https://github.com/VisionCrizzal/touchbar-addon-new-FF#1-build--install-the-native-messaging-host'
+  'https://github.com/VisionCrizzal/touchbar-addon-new-FF#1-install-the-macos-companion-helper'
 
 export function renderMainMenu({ status, packets, onNavigate }) {
   const connected = Boolean(status?.nativeConnected)
   const modeLabel = status?.activeStatus?.activeLayoutType || 'Global Firefox Bar'
 
-  const nodes = [
+  const statusNodes = [
     el('small', { className: 'menu-label', text: 'Status' }),
     el('div', { className: 'status-row' }, [
       el(
@@ -25,7 +25,7 @@ export function renderMainMenu({ status, packets, onNavigate }) {
   ]
 
   if (!connected) {
-    nodes.push(
+    statusNodes.push(
       el('div', { className: 'helper-notice' }, [
         el('div', {
           text: 'Touch Bar rendering requires installing the macOS companion helper (touchbar-browser-helper).',
@@ -44,33 +44,33 @@ export function renderMainMenu({ status, packets, onNavigate }) {
     )
   }
 
-  nodes.push(
-    el('hr', { className: 'separator' }),
-    el(
-      'button',
-      {
-        className: 'menu-item-btn',
-        type: 'button',
-        onClick: () => onNavigate('/installed-packets'),
-      },
-      [
-        el('span', { text: `Installed packets (${packets.length})` }),
-        el('span', { className: 'menu-item-chevron', text: '›' }),
-      ]
-    ),
-    el(
-      'button',
-      {
-        className: 'menu-item-btn',
-        type: 'button',
-        onClick: () => onNavigate('/settings'),
-      },
-      [
-        el('span', { text: 'Touch Bar Settings' }),
-        el('span', { className: 'menu-item-chevron', text: '›' }),
-      ]
-    )
-  )
-
-  return el('div', {}, nodes)
+  return el('div', {}, [
+    el('section', { className: 'glass-card' }, statusNodes),
+    el('section', { className: 'glass-card' }, [
+      el(
+        'button',
+        {
+          className: 'menu-item-btn',
+          type: 'button',
+          onClick: () => onNavigate('/installed-packets'),
+        },
+        [
+          el('span', { text: `Installed packets (${packets.length})` }),
+          el('span', { className: 'menu-item-chevron', text: '›' }),
+        ]
+      ),
+      el(
+        'button',
+        {
+          className: 'menu-item-btn',
+          type: 'button',
+          onClick: () => onNavigate('/settings'),
+        },
+        [
+          el('span', { text: 'Touch Bar Settings' }),
+          el('span', { className: 'menu-item-chevron', text: '›' }),
+        ]
+      ),
+    ]),
+  ])
 }

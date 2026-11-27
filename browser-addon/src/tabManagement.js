@@ -279,6 +279,7 @@ export async function updateSettings(newSettings) {
       autoPresent: currentSettings.autoPresent,
       replaceNative: currentSettings.replaceNativeTouchBar,
       fullWidth: currentSettings.fullWidthMode,
+      glassStyle: currentSettings.glassStyle,
     })
   }
   await refreshTouchbarForActiveTab()

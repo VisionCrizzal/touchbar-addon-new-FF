@@ -4,6 +4,7 @@ export const DEFAULT_SETTINGS = {
   settingsVersion: SETTINGS_VERSION,
   replaceNativeTouchBar: true,
   fullWidthMode: false,
+  glassStyle: true,
   showNavigation: true,
   showTabScrubber: true,
   showNewTab: true,
