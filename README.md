@@ -49,7 +49,10 @@ cd touchbar-addon-new-FF
 
 ### 2. Install the Firefox Extension
 
-- **Mozilla Add-ons (AMO):** Install from Firefox Add-ons once public review is approved *(currently `v0.2.1` Awaiting Review — see [`AMO_SUBMISSION.md`](./AMO_SUBMISSION.md))*.
+- **Prebuilt Mozilla-Signed `.xpi` (Recommended):**
+  1. Download `1a0a89ff671a48619ba1-0.2.2.xpi` (or the latest `.xpi`) from the [**Latest GitHub Release**](https://github.com/VisionCrizzal/touchbar-addon-new-FF/releases/latest).
+  2. In Firefox, open `about:addons` → click the gear icon (**⚙**) → **Install Add-on From File…** → select the `.xpi` file *(or drag & drop it directly into Firefox)* and click **Add**.
+  *(Signed by Mozilla via the AMO Unlisted channel, so it installs permanently in standard Firefox without needing `about:debugging`.)*
 - **Or load a local development build** (see [Building from Source](#building-from-source) below).
 
 After installing both parts, **quit Firefox completely (`Cmd+Q`) once and reopen it**, then click the Touch Bar icon in the Firefox toolbar to confirm status reads **`Helper Connected`**.
@@ -118,8 +121,8 @@ Compiled extension files are written to `browser-addon/dist/`.
 
 ```sh
 cd browser-addon
-npm run package         # -> web-ext-artifacts/touchbar_addon_for_firefox-0.2.1.zip
-npm run package:source  # -> web-ext-artifacts/touchbar_addon_for_firefox-0.2.1-source.zip
+npm run package         # -> web-ext-artifacts/touchbar_addon_for_firefox-0.2.2.zip
+npm run package:source  # -> web-ext-artifacts/touchbar_addon_for_firefox-0.2.2-source.zip
 ```
 
 For AMO Unlisted/Listed signing CLI commands (`npm run sign:unlisted`, `npm run sign:listed`) and reviewer notes, see [`AMO_SUBMISSION.md`](./AMO_SUBMISSION.md).
