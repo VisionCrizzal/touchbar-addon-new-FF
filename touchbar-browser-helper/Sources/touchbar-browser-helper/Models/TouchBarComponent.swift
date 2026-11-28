@@ -118,6 +118,18 @@ final class TabScrubberItemView: NSScrubberItemView {
     fatalError("init(coder:) has not been implemented")
   }
 
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    faviconView.image = nil
+    faviconView.contentTintColor = nil
+    label.stringValue = ""
+    label.isHidden = false
+    badgeView.image = nil
+    badgeView.isHidden = true
+    alphaValue = 1.0
+    isHidden = false
+  }
+
   override func layout() {
     super.layout()
     CATransaction.begin()
@@ -192,6 +204,7 @@ final class TabScrubberItemView: NSScrubberItemView {
     }
 
     label.font = NSFont.systemFont(ofSize: 12.5, weight: isActive ? .semibold : .regular)
+    needsLayout = true
   }
 }
 
@@ -257,21 +270,31 @@ final class ScrubberTouchBarController:
 
     if oldIds == newIds {
       var changedIndices = IndexSet()
-      let countChanged = self.items.count != newItems.count
       for idx in 0..<newItems.count where self.items[idx] != newItems[idx] {
         changedIndices.insert(idx)
       }
       self.items = newItems
 
-      if animated && !TouchBarMotion.reduceMotion && !countChanged {
+      // Reconfigure visible item views in place instead of calling NSScrubber.reloadItems(at:).
+      // AppKit's reloadItems(at:) removes the outgoing view from _itemViewMap while keeping it in
+      // _contentView.subviews during its async crossfade; a subsequent reloadData() before that
+      // transition finishes drops the exiting view permanently as an overlapping ghost label.
+      for idx in changedIndices {
+        if let itemView = scrubber.itemViewForItem(at: idx) as? TabScrubberItemView {
+          itemView.configure(
+            item: newItems[idx],
+            showTitle: shouldShowTitle(for: idx),
+            glassStyle: glassStyle
+          )
+        }
+      }
+
+      if animated && !TouchBarMotion.reduceMotion {
         NSAnimationContext.runAnimationGroup { context in
           context.duration = 0.22
           context.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1.0, 0.32, 1.0)
           context.allowsImplicitAnimation = true
-          if !changedIndices.isEmpty {
-            scrubber.reloadItems(at: changedIndices)
-          }
-          scrubber.scrubberLayout.invalidateLayout()
+          invalidateLayout(for: changedIndices)
           if let idx = selectedIndex, idx >= 0, idx < newItems.count {
             scrubber.animator().selectedIndex = idx
             scrubber.animator().scrollItem(at: idx, to: .center)
@@ -280,16 +303,22 @@ final class ScrubberTouchBarController:
           }
         }
       } else {
-        if !changedIndices.isEmpty {
-          scrubber.reloadItems(at: changedIndices)
-        }
-        scrubber.scrubberLayout.invalidateLayout()
+        invalidateLayout(for: changedIndices)
         applySelection(selectedIndex, animated: false)
       }
     } else {
       self.items = newItems
       scrubber.reloadData()
       applySelection(selectedIndex, animated: false)
+    }
+  }
+
+  private func invalidateLayout(for changedIndices: IndexSet) {
+    guard !changedIndices.isEmpty else { return }
+    if let flowLayout = scrubber.scrubberLayout as? NSScrubberFlowLayout {
+      flowLayout.invalidateLayoutForItems(at: changedIndices)
+    } else {
+      scrubber.scrubberLayout.invalidateLayout()
     }
   }
 

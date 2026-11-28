@@ -234,15 +234,43 @@ async function run() {
   sendFrame(proc, { type: 'set_config', glassStyle: true })
   console.log('PASS 6/8: in-place layout reconciliation + glassStyle toggle (false -> true)')
 
-  // 7. Update scrubber count + switch to compact media layout + GlassSlider update + follow-up ping
+  // 7. Rapid scrubber title update + tab count churn (regression for NSScrubber orphan view) + media layout + ping
+  sendFrame(proc, {
+    type: 'update_item',
+    name: '__global_tabs',
+    values: {
+      selectedIndex: 0,
+      items: [{ id: '1', label: 'Tab mới', active: true }],
+    },
+  })
   sendFrame(proc, {
     type: 'update_item',
     name: '__global_tabs',
     values: {
       selectedIndex: 0,
       items: [
-        { id: '1', label: 'Mozilla', favicon: SAMPLE_FAVICON_PNG, active: true },
-        { id: '2', label: 'YouTube', favicon: SAMPLE_FAVICON_PNG, active: false },
+        { id: '1', label: 'Reddit - The heart of the internet', favicon: SAMPLE_FAVICON_PNG, active: true },
+      ],
+    },
+  })
+  sendFrame(proc, {
+    type: 'update_item',
+    name: '__global_tabs',
+    values: {
+      selectedIndex: 1,
+      items: [
+        { id: '1', label: 'Tab mới', active: false },
+        { id: '2', label: 'Reddit - The heart of the internet', favicon: SAMPLE_FAVICON_PNG, active: true },
+      ],
+    },
+  })
+  sendFrame(proc, {
+    type: 'update_item',
+    name: '__global_tabs',
+    values: {
+      selectedIndex: 0,
+      items: [
+        { id: '2', label: 'Antigravity ju...', favicon: SAMPLE_FAVICON_PNG, active: true },
       ],
     },
   })
@@ -274,7 +302,7 @@ async function run() {
   sendFrame(proc, { type: 'ping' })
   const followUp2 = await readFrame()
   assert.deepEqual(followUp2, { type: 'ping', success: true, value: 'pong' })
-  console.log('PASS 7/8: scrubber shrink + media layout transition + GlassSlider update + ping')
+  console.log('PASS 7/8: scrubber rapid title/count churn + media layout transition + GlassSlider update + ping')
 
   // 8. EOF clean exit within 3s
   const startMs = Date.now()
